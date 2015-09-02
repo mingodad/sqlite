@@ -4135,12 +4135,13 @@ int sqlite3VdbeIdxKeyCompare(
   assert( sqlite3BtreeCursorIsValid(pCur) );
   VVA_ONLY(rc =) sqlite3BtreeKeySize(pCur, &nCellKey);
   assert( rc==SQLITE_OK );    /* pCur is always valid so KeySize cannot fail */
-  /* nCellKey will always be between 0 and 0xffffffff because of the way
+  /* nCellKey will always be between 0 and 0x7fffffff because of the way
   ** that btreeParseCellPtr() and sqlite3GetVarint32() are implemented */
-  if( nCellKey<=0 || nCellKey>0x7fffffff ){
+  if( (nCellKey & ~(i64)0x7fffffff)!=0 ){
     *res = 0;
     return SQLITE_CORRUPT_BKPT;
   }
+  assert( nCellKey>=0 && nCellKey<=0x7fffffff );
   sqlite3VdbeMemInit(&m, db, 0);
   rc = sqlite3VdbeMemFromBtree(pC->pCursor, 0, (u32)nCellKey, 1, &m);
   if( rc ){

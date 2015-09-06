@@ -1,0 +1,3 @@
+#export TCLSH_CMD=tclsh85
+LIBS=-lm ./configure  --disable-amalgamation --disable-shared
+

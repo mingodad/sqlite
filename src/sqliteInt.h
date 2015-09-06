@@ -3956,4 +3956,23 @@ int sqlite3ThreadJoin(SQLiteThread*, void**);
 int sqlite3DbstatRegister(sqlite3*);
 #endif
 
+#ifndef SQLITE_OMIT_SQL_PREPARED
+typedef struct SqlPreparedStep SqlPreparedStep;
+void sqlite3SqlPreparedBeginParse(Parse *pParse,
+  Token *pName, int ifNotExists );
+void sqlite3SqlPreparedFinishParse(Parse *pParse, Token *pEnd, SqlPreparedStep *pStepList);
+void sqlite3SqlPreparedArgInit(Parse *pParse);
+void sqlite3SqlPreparedArgExtend(Parse *pParse, Token *p);
+void sqlite3SqlPreparedExecute(Parse *pParse, Token *pName);
+void sqlite3SqlPreparedDeallocate(Parse *pParse, Token *pName, int ifExists);
+void sqlite3SqlPreparedDeletePreparedStep(sqlite3 *db, SqlPreparedStep *pSqlPreparedStep);
+SqlPreparedStep *sqlite3SqlPreparedUpdateStep(
+  sqlite3 *db,  Token *pTableName, ExprList *pEList, Expr *pWhere,  u8 orconf);
+SqlPreparedStep *sqlite3SqlPreparedInsertStep(
+  sqlite3 *db, Token *pTableName, IdList *pColumn, Select *pSelect, u8 orconf);
+SqlPreparedStep *sqlite3SqlPreparedDeleteStep(
+  sqlite3 *db, Token *pTableName, Expr *pWhere);
+SqlPreparedStep *sqlite3SqlPreparedSelectStep(sqlite3 *db, Select *pSelect);
+#endif /*SQLITE_OMIT_SQL_PREPARED*/
+
 #endif /* _SQLITEINT_H_ */

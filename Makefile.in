@@ -186,7 +186,7 @@ LIBOBJS0 = alter.lo analyze.lo attach.lo auth.lo \
          update.lo util.lo vacuum.lo \
          vdbe.lo vdbeapi.lo vdbeaux.lo vdbeblob.lo vdbemem.lo vdbesort.lo \
          vdbetrace.lo wal.lo walker.lo where.lo wherecode.lo whereexpr.lo \
-         utf.lo vtab.lo
+         utf.lo vtab.lo sql_prepared.lo
 
 # Object files for the amalgamation.
 #
@@ -267,6 +267,7 @@ SRC = \
   $(TOP)/src/select.c \
   $(TOP)/src/status.c \
   $(TOP)/src/shell.c \
+  $(TOP)/src/sql_prepared.c \
   $(TOP)/src/sqlite.h.in \
   $(TOP)/src/sqlite3ext.h \
   $(TOP)/src/sqliteInt.h \
@@ -857,6 +858,9 @@ vdbetrace.lo:	$(TOP)/src/vdbetrace.c $(HDR)
 
 vtab.lo:	$(TOP)/src/vtab.c $(HDR)
 	$(LTCOMPILE) $(TEMP_STORE) -c $(TOP)/src/vtab.c
+
+sql_prepared.lo:	$(TOP)/src/sql_prepared.c $(HDR)
+	$(LTCOMPILE) $(TEMP_STORE) -c $(TOP)/src/sql_prepared.c
 
 wal.lo:	$(TOP)/src/wal.c $(HDR)
 	$(LTCOMPILE) $(TEMP_STORE) -c $(TOP)/src/wal.c

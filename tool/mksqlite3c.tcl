@@ -343,6 +343,7 @@ foreach file {
    pragma.c
    prepare.c
    select.c
+   sql_prepared.c
    table.c
    trigger.c
    update.c

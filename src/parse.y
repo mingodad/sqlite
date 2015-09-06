@@ -1516,6 +1516,59 @@ anylist ::= anylist LP anylist RP.
 anylist ::= anylist ANY.
 %endif  SQLITE_OMIT_VIRTUALTABLE
 
+///////////////////// The SQL PREPARE statement /////////////////////////////
+%ifndef SQLITE_OMIT_SQL_PREPARED
+cmd ::= create_prepared.  {sqlite3SqlPreparedFinishParse(pParse,0, 0);}
+cmd ::= create_prepared LP prepared_arglist RP(X) AS prepared_cmd(S) .  {
+  sqlite3SqlPreparedFinishParse(pParse, &X, S);
+}
+create_prepared ::= PREPARE ifnotexists(E) nm(X) . {
+  sqlite3SqlPreparedBeginParse(pParse, &X, E);
+}
+
+%type prepared_cmd {SqlPreparedStep*}
+%destructor prepared_cmd {sqlite3SqlPreparedDeletePreparedStep(pParse->db, $$);}
+// UPDATE 
+prepared_cmd(A) ::=
+   UPDATE orconf(R) nm(X)  SET setlist(Y) where_opt(Z).  
+   { A = sqlite3SqlPreparedUpdateStep(pParse->db, &X, Y, Z, R); }
+
+// INSERT
+prepared_cmd(A) ::= insert_cmd(R) INTO nm(X) idlist_opt(F) select(S).
+               {A = sqlite3SqlPreparedInsertStep(pParse->db, &X, F, S, R);}
+
+// DELETE
+prepared_cmd(A) ::= DELETE FROM nm(X) where_opt(Y).
+               {A = sqlite3SqlPreparedDeleteStep(pParse->db, &X, Y);}
+
+// SELECT
+prepared_cmd(A) ::= select(X).  {A = sqlite3SqlPreparedSelectStep(pParse->db, X); }
+
+cmd ::= EXECUTE nm(X) LP  prepared_arglist  RP.	{
+  sqlite3SqlPreparedExecute(pParse, &X);
+}
+cmd ::= DEALLOCATE prepare_opt ifexists(E) nm(X). {
+  sqlite3SqlPreparedDeallocate(pParse, &X, E);
+}
+
+prepare_opt ::= .
+prepare_opt ::= PREPARE.
+
+prepared_arglist ::= prepared_arg.
+prepared_arglist ::= prepared_arglist COMMA prepared_arg.
+prepared_arg ::= .  {sqlite3SqlPreparedArgInit(pParse);}
+prepared_arg ::= prepared_arg prepared_argtoken.
+prepared_argtoken ::= ANY(X).  {sqlite3SqlPreparedArgExtend(pParse,&X);}
+prepared_argtoken ::= prepared_lp prepared_anylist RP(X).  {
+  sqlite3SqlPreparedArgExtend(pParse,&X);
+}
+prepared_lp ::= LP(X).  {sqlite3SqlPreparedArgExtend(pParse,&X);}
+prepared_anylist ::= .
+prepared_anylist ::= prepared_anylist LP prepared_anylist RP.
+prepared_anylist ::= prepared_anylist ANY.
+
+%endif  SQLITE_OMIT_SQL_PREPARED
+
 
 //////////////////////// COMMON TABLE EXPRESSIONS ////////////////////////////
 %type with {With*}

@@ -1516,6 +1516,25 @@ anylist ::= anylist LP anylist RP.
 anylist ::= anylist ANY.
 %endif  SQLITE_OMIT_VIRTUALTABLE
 
+//////////////////////// COMMON TABLE EXPRESSIONS ////////////////////////////
+%type with {With*}
+%type wqlist {With*}
+%destructor with {sqlite3WithDelete(pParse->db, $$);}
+%destructor wqlist {sqlite3WithDelete(pParse->db, $$);}
+
+with(A) ::= . {A = 0;}
+%ifndef SQLITE_OMIT_CTE
+with(A) ::= WITH wqlist(W).              { A = W; }
+with(A) ::= WITH RECURSIVE wqlist(W).    { A = W; }
+
+wqlist(A) ::= nm(X) eidlist_opt(Y) AS LP select(Z) RP. {
+  A = sqlite3WithAdd(pParse, 0, &X, Y, Z);
+}
+wqlist(A) ::= wqlist(W) COMMA nm(X) eidlist_opt(Y) AS LP select(Z) RP. {
+  A = sqlite3WithAdd(pParse, W, &X, Y, Z);
+}
+%endif  SQLITE_OMIT_CTE
+
 ///////////////////// The SQL PREPARE statement /////////////////////////////
 %ifndef SQLITE_OMIT_SQL_PREPARED
 cmd ::= create_prepared.  {sqlite3SqlPreparedFinishParse(pParse,0, 0);}
@@ -1529,8 +1548,7 @@ create_prepared ::= PREPARE ifnotexists(E) nm(X) . {
 %type prepared_cmd {SqlPreparedStep*}
 %destructor prepared_cmd {sqlite3SqlPreparedDeletePreparedStep(pParse->db, $$);}
 // UPDATE 
-prepared_cmd(A) ::=
-   UPDATE orconf(R) nm(X)  SET setlist(Y) where_opt(Z).  
+prepared_cmd(A) ::= UPDATE orconf(R) nm(X)  SET setlist(Y) where_opt(Z).  
    { A = sqlite3SqlPreparedUpdateStep(pParse->db, &X, Y, Z, R); }
 
 // INSERT
@@ -1569,22 +1587,3 @@ prepared_anylist ::= prepared_anylist ANY.
 
 %endif  SQLITE_OMIT_SQL_PREPARED
 
-
-//////////////////////// COMMON TABLE EXPRESSIONS ////////////////////////////
-%type with {With*}
-%type wqlist {With*}
-%destructor with {sqlite3WithDelete(pParse->db, $$);}
-%destructor wqlist {sqlite3WithDelete(pParse->db, $$);}
-
-with(A) ::= . {A = 0;}
-%ifndef SQLITE_OMIT_CTE
-with(A) ::= WITH wqlist(W).              { A = W; }
-with(A) ::= WITH RECURSIVE wqlist(W).    { A = W; }
-
-wqlist(A) ::= nm(X) eidlist_opt(Y) AS LP select(Z) RP. {
-  A = sqlite3WithAdd(pParse, 0, &X, Y, Z);
-}
-wqlist(A) ::= wqlist(W) COMMA nm(X) eidlist_opt(Y) AS LP select(Z) RP. {
-  A = sqlite3WithAdd(pParse, W, &X, Y, Z);
-}
-%endif  SQLITE_OMIT_CTE

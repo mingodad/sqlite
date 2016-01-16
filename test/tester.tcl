@@ -746,8 +746,8 @@ proc do_test {name cmd expected} {
         # if {![info exists ::testprefix] || $::testprefix eq ""} {
         #   error "no test prefix"
         # }
-        output2_if_no_verbose -nonewline $name...
-        output2 "\nExpected: \[$expected\]\n     Got: \[$result\]"
+        output1 ""
+        output2 "! $name expected: \[$expected\]\n! $name got:      \[$result\]"
         fail_test $name
       } else {
         output1 " Ok"
@@ -1028,10 +1028,16 @@ proc finalize_testing {} {
     output2 "[expr {$nErr-$nKnown}] new errors and $nKnown known errors\
          out of $nTest tests"
   } else {
-    output2 "$nErr errors out of $nTest tests"
+    set cpuinfo {}
+    if {[catch {exec hostname} hname]==0} {set cpuinfo [string trim $hname]}
+    append cpuinfo " $::tcl_platform(os)"
+    append cpuinfo " [expr {$::tcl_platform(pointerSize)*8}]-bit"
+    append cpuinfo " [string map {E -e} $::tcl_platform(byteOrder)]"
+    output2 "SQLite [sqlite3 -sourceid]"
+    output2 "$nErr errors out of $nTest tests on $cpuinfo"
   }
   if {$nErr>$nKnown} {
-    output2 -nonewline "Failures on these tests:"
+    output2 -nonewline "!Failures on these tests:"
     foreach x [set_test_counter fail_list] {
       if {![info exists known_error($x)]} {output2 -nonewline " $x"}
     }
@@ -1047,7 +1053,7 @@ proc finalize_testing {} {
     foreach {rec} [lsort $omitList] {
       if {$rec==$prec} continue
       set prec $rec
-      output2 [format {  %-12s %s} [lindex $rec 0] [lindex $rec 1]]
+      output2 [format {.  %-12s %s} [lindex $rec 0] [lindex $rec 1]]
     }
   }
   if {$nErr>0 && ![working_64bit_int]} {

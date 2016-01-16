@@ -187,6 +187,9 @@ int sqlite3_value_int(sqlite3_value *pVal){
 sqlite_int64 sqlite3_value_int64(sqlite3_value *pVal){
   return sqlite3VdbeIntValue((Mem*)pVal);
 }
+unsigned int sqlite3_value_subtype(sqlite3_value *pVal){
+  return ((Mem*)pVal)->eSubtype;
+}
 const unsigned char *sqlite3_value_text(sqlite3_value *pVal){
   return (const unsigned char *)sqlite3ValueText(pVal, SQLITE_UTF8);
 }
@@ -364,6 +367,10 @@ void sqlite3_result_int64(sqlite3_context *pCtx, i64 iVal){
 void sqlite3_result_null(sqlite3_context *pCtx){
   assert( sqlite3_mutex_held(pCtx->pOut->db->mutex) );
   sqlite3VdbeMemSetNull(pCtx->pOut);
+}
+void sqlite3_result_subtype(sqlite3_context *pCtx, unsigned int eSubtype){
+  assert( sqlite3_mutex_held(pCtx->pOut->db->mutex) );
+  pCtx->pOut->eSubtype = eSubtype & 0xff;
 }
 void sqlite3_result_text(
   sqlite3_context *pCtx, 
@@ -696,7 +703,7 @@ void *sqlite3_user_data(sqlite3_context *p){
 ** application defined function.
 */
 sqlite3 *sqlite3_context_db_handle(sqlite3_context *p){
-  assert( p && p->pFunc );
+  assert( p && p->pOut );
   return p->pOut->db;
 }
 
@@ -772,7 +779,7 @@ static SQLITE_NOINLINE void *createAggContext(sqlite3_context *p, int nByte){
 ** same context that was returned on prior calls.
 */
 void *sqlite3_aggregate_context(sqlite3_context *p, int nByte){
-  assert( p && p->pFunc && p->pFunc->xStep );
+  assert( p && p->pFunc && p->pFunc->xFinalize );
   assert( sqlite3_mutex_held(p->pOut->db->mutex) );
   testcase( nByte<0 );
   if( (p->pMem->flags & MEM_Agg)==0 ){
@@ -863,7 +870,7 @@ failed:
 ** context.
 */
 int sqlite3_aggregate_count(sqlite3_context *p){
-  assert( p && p->pMem && p->pFunc && p->pFunc->xStep );
+  assert( p && p->pMem && p->pFunc && p->pFunc->xFinalize );
   return p->pMem->n;
 }
 #endif
@@ -905,18 +912,19 @@ static const Mem *columnNullValue(void){
 #endif
     = {
         /* .u          = */ {0},
-        /* .flags      = */ MEM_Null,
-        /* .enc        = */ 0,
-        /* .n          = */ 0,
-        /* .z          = */ 0,
-        /* .zMalloc    = */ 0,
-        /* .szMalloc   = */ 0,
-        /* .iPadding1  = */ 0,
-        /* .db         = */ 0,
-        /* .xDel       = */ 0,
+        /* .flags      = */ (u16)MEM_Null,
+        /* .enc        = */ (u8)0,
+        /* .eSubtype   = */ (u8)0,
+        /* .n          = */ (int)0,
+        /* .z          = */ (char*)0,
+        /* .zMalloc    = */ (char*)0,
+        /* .szMalloc   = */ (int)0,
+        /* .uTemp      = */ (u32)0,
+        /* .db         = */ (sqlite3*)0,
+        /* .xDel       = */ (void(*)(void*))0,
 #ifdef SQLITE_DEBUG
-        /* .pScopyFrom = */ 0,
-        /* .pFiller    = */ 0,
+        /* .pScopyFrom = */ (Mem*)0,
+        /* .pFiller    = */ (void*)0,
 #endif
       };
   return &nullMem;

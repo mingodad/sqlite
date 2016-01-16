@@ -76,7 +76,7 @@ static int blobSeekToRow(Incrblob *p, sqlite3_int64 iRow, char **pzErr){
     }else{
       p->iOffset = pC->aType[p->iCol + pC->nField];
       p->nByte = sqlite3VdbeSerialTypeLen(type);
-      p->pCsr =  pC->pCursor;
+      p->pCsr =  pC->uc.pCursor;
       sqlite3BtreeIncrblobCursor(p->pCsr);
     }
   }
@@ -248,7 +248,7 @@ int sqlite3_blob_open(
         int j;
         for(j=0; j<pIdx->nKeyCol; j++){
           /* FIXME: Be smarter about indexes that use expressions */
-          if( pIdx->aiColumn[j]==iCol || pIdx->aiColumn[j]==(-2) ){
+          if( pIdx->aiColumn[j]==iCol || pIdx->aiColumn[j]==XN_EXPR ){
             zFault = "indexed";
           }
         }

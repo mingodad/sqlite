@@ -15,34 +15,30 @@
 
 #include "fts5Int.h"
 
-int sqlite3Fts5BufferGrow(int *pRc, Fts5Buffer *pBuf, int nByte){
-  /* A no-op if an error has already occurred */
-  if( *pRc ) return 1;
-
-  if( (pBuf->n + nByte) > pBuf->nSpace ){
-    u8 *pNew;
-    int nNew = pBuf->nSpace ? pBuf->nSpace*2 : 64;
-    while( nNew<(pBuf->n + nByte) ){
-      nNew = nNew * 2;
-    }
-    pNew = sqlite3_realloc(pBuf->p, nNew);
-    if( pNew==0 ){
-      *pRc = SQLITE_NOMEM;
-      return 1;
-    }else{
-      pBuf->nSpace = nNew;
-      pBuf->p = pNew;
-    }
+int sqlite3Fts5BufferSize(int *pRc, Fts5Buffer *pBuf, int nByte){
+  int nNew = pBuf->nSpace ? pBuf->nSpace*2 : 64;
+  u8 *pNew;
+  while( nNew<nByte ){
+    nNew = nNew * 2;
+  }
+  pNew = sqlite3_realloc(pBuf->p, nNew);
+  if( pNew==0 ){
+    *pRc = SQLITE_NOMEM;
+    return 1;
+  }else{
+    pBuf->nSpace = nNew;
+    pBuf->p = pNew;
   }
   return 0;
 }
+
 
 /*
 ** Encode value iVal as an SQLite varint and append it to the buffer object
 ** pBuf. If an OOM error occurs, set the error code in p.
 */
 void sqlite3Fts5BufferAppendVarint(int *pRc, Fts5Buffer *pBuf, i64 iVal){
-  if( sqlite3Fts5BufferGrow(pRc, pBuf, 9) ) return;
+  if( fts5BufferGrow(pRc, pBuf, 9) ) return;
   pBuf->n += sqlite3Fts5PutVarint(&pBuf->p[pBuf->n], iVal);
 }
 
@@ -57,12 +53,6 @@ int sqlite3Fts5Get32(const u8 *aBuf){
   return (aBuf[0] << 24) + (aBuf[1] << 16) + (aBuf[2] << 8) + aBuf[3];
 }
 
-void sqlite3Fts5BufferAppend32(int *pRc, Fts5Buffer *pBuf, int iVal){
-  if( sqlite3Fts5BufferGrow(pRc, pBuf, 4) ) return;
-  sqlite3Fts5Put32(&pBuf->p[pBuf->n], iVal);
-  pBuf->n += 4;
-}
-
 /*
 ** Append buffer nData/pData to buffer pBuf. If an OOM error occurs, set 
 ** the error code in p. If an error has already occurred when this function
@@ -75,7 +65,7 @@ void sqlite3Fts5BufferAppendBlob(
   const u8 *pData
 ){
   assert( *pRc || nData>=0 );
-  if( sqlite3Fts5BufferGrow(pRc, pBuf, nData) ) return;
+  if( fts5BufferGrow(pRc, pBuf, nData) ) return;
   memcpy(&pBuf->p[pBuf->n], pData, nData);
   pBuf->n += nData;
 }
@@ -90,7 +80,7 @@ void sqlite3Fts5BufferAppendString(
   Fts5Buffer *pBuf, 
   const char *zStr
 ){
-  int nStr = strlen(zStr);
+  int nStr = (int)strlen(zStr);
   sqlite3Fts5BufferAppendBlob(pRc, pBuf, nStr+1, (const u8*)zStr);
   pBuf->n--;
 }
@@ -183,11 +173,11 @@ int sqlite3Fts5PoslistNext64(
   }else{
     i64 iOff = *piOff;
     int iVal;
-    i += fts5GetVarint32(&a[i], iVal);
+    fts5FastGetVarint32(a, i, iVal);
     if( iVal==1 ){
-      i += fts5GetVarint32(&a[i], iVal);
+      fts5FastGetVarint32(a, i, iVal);
       iOff = ((i64)iVal) << 32;
-      i += fts5GetVarint32(&a[i], iVal);
+      fts5FastGetVarint32(a, i, iVal);
     }
     *piOff = iOff + (iVal-2);
     *pi = i;
@@ -201,26 +191,20 @@ int sqlite3Fts5PoslistNext64(
 ** if the iterator reaches EOF, or false otherwise.
 */
 int sqlite3Fts5PoslistReaderNext(Fts5PoslistReader *pIter){
-  if( sqlite3Fts5PoslistNext64(pIter->a, pIter->n, &pIter->i, &pIter->iPos) 
-   || (pIter->iCol>=0 && (pIter->iPos >> 32) > pIter->iCol)
-  ){
+  if( sqlite3Fts5PoslistNext64(pIter->a, pIter->n, &pIter->i, &pIter->iPos) ){
     pIter->bEof = 1;
   }
   return pIter->bEof;
 }
 
 int sqlite3Fts5PoslistReaderInit(
-  int iCol,                       /* If (iCol>=0), this column only */
   const u8 *a, int n,             /* Poslist buffer to iterate through */
   Fts5PoslistReader *pIter        /* Iterator object to initialize */
 ){
   memset(pIter, 0, sizeof(*pIter));
   pIter->a = a;
   pIter->n = n;
-  pIter->iCol = iCol;
-  do {
-    sqlite3Fts5PoslistReaderNext(pIter);
-  }while( pIter->bEof==0 && (pIter->iPos >> 32)<iCol );
+  sqlite3Fts5PoslistReaderNext(pIter);
   return pIter->bEof;
 }
 
@@ -231,13 +215,15 @@ int sqlite3Fts5PoslistWriterAppend(
 ){
   static const i64 colmask = ((i64)(0x7FFFFFFF)) << 32;
   int rc = SQLITE_OK;
-  if( (iPos & colmask) != (pWriter->iPrev & colmask) ){
-    fts5BufferAppendVarint(&rc, pBuf, 1);
-    fts5BufferAppendVarint(&rc, pBuf, (iPos >> 32));
-    pWriter->iPrev = (iPos & colmask);
+  if( 0==fts5BufferGrow(&rc, pBuf, 5+5+5) ){
+    if( (iPos & colmask) != (pWriter->iPrev & colmask) ){
+      pBuf->p[pBuf->n++] = 1;
+      pBuf->n += sqlite3Fts5PutVarint(&pBuf->p[pBuf->n], (iPos>>32));
+      pWriter->iPrev = (iPos & colmask);
+    }
+    pBuf->n += sqlite3Fts5PutVarint(&pBuf->p[pBuf->n], (iPos-pWriter->iPrev)+2);
+    pWriter->iPrev = iPos;
   }
-  fts5BufferAppendVarint(&rc, pBuf, (iPos - pWriter->iPrev) + 2);
-  pWriter->iPrev = iPos;
   return rc;
 }
 
@@ -266,7 +252,7 @@ char *sqlite3Fts5Strndup(int *pRc, const char *pIn, int nIn){
   char *zRet = 0;
   if( *pRc==SQLITE_OK ){
     if( nIn<0 ){
-      nIn = strlen(pIn);
+      nIn = (int)strlen(pIn);
     }
     zRet = (char*)sqlite3_malloc(nIn+1);
     if( zRet ){
@@ -288,11 +274,12 @@ char *sqlite3Fts5Strndup(int *pRc, const char *pIn, int nIn){
 **   * The 52 upper and lower case ASCII characters, and
 **   * The 10 integer ASCII characters.
 **   * The underscore character "_" (0x5F).
+**   * The unicode "subsitute" character (0x1A).
 */
 int sqlite3Fts5IsBareword(char t){
   u8 aBareword[128] = {
     0, 0, 0, 0, 0, 0, 0, 0,    0, 0, 0, 0, 0, 0, 0, 0,   /* 0x00 .. 0x0F */
-    0, 0, 0, 0, 0, 0, 0, 0,    0, 0, 0, 0, 0, 0, 0, 0,   /* 0x10 .. 0x1F */
+    0, 0, 0, 0, 0, 0, 0, 0,    0, 0, 1, 0, 0, 0, 0, 0,   /* 0x10 .. 0x1F */
     0, 0, 0, 0, 0, 0, 0, 0,    0, 0, 0, 0, 0, 0, 0, 0,   /* 0x20 .. 0x2F */
     1, 1, 1, 1, 1, 1, 1, 1,    1, 1, 0, 0, 0, 0, 0, 0,   /* 0x30 .. 0x3F */
     0, 1, 1, 1, 1, 1, 1, 1,    1, 1, 1, 1, 1, 1, 1, 1,   /* 0x40 .. 0x4F */
@@ -303,5 +290,88 @@ int sqlite3Fts5IsBareword(char t){
 
   return (t & 0x80) || aBareword[(int)t];
 }
+
+
+/*************************************************************************
+*/
+typedef struct Fts5TermsetEntry Fts5TermsetEntry;
+struct Fts5TermsetEntry {
+  char *pTerm;
+  int nTerm;
+  int iIdx;                       /* Index (main or aPrefix[] entry) */
+  Fts5TermsetEntry *pNext;
+};
+
+struct Fts5Termset {
+  Fts5TermsetEntry *apHash[512];
+};
+
+int sqlite3Fts5TermsetNew(Fts5Termset **pp){
+  int rc = SQLITE_OK;
+  *pp = sqlite3Fts5MallocZero(&rc, sizeof(Fts5Termset));
+  return rc;
+}
+
+int sqlite3Fts5TermsetAdd(
+  Fts5Termset *p, 
+  int iIdx,
+  const char *pTerm, int nTerm, 
+  int *pbPresent
+){
+  int rc = SQLITE_OK;
+  *pbPresent = 0;
+  if( p ){
+    int i;
+    int hash;
+    Fts5TermsetEntry *pEntry;
+
+    /* Calculate a hash value for this term */
+    hash = 104 + iIdx;
+    for(i=0; i<nTerm; i++){
+      hash += (hash << 3) + (int)pTerm[i];
+    }
+    hash = hash % ArraySize(p->apHash);
+
+    for(pEntry=p->apHash[hash]; pEntry; pEntry=pEntry->pNext){
+      if( pEntry->iIdx==iIdx 
+          && pEntry->nTerm==nTerm 
+          && memcmp(pEntry->pTerm, pTerm, nTerm)==0 
+        ){
+        *pbPresent = 1;
+        break;
+      }
+    }
+
+    if( pEntry==0 ){
+      pEntry = sqlite3Fts5MallocZero(&rc, sizeof(Fts5TermsetEntry) + nTerm);
+      if( pEntry ){
+        pEntry->pTerm = (char*)&pEntry[1];
+        pEntry->nTerm = nTerm;
+        pEntry->iIdx = iIdx;
+        memcpy(pEntry->pTerm, pTerm, nTerm);
+        pEntry->pNext = p->apHash[hash];
+        p->apHash[hash] = pEntry;
+      }
+    }
+  }
+
+  return rc;
+}
+
+void sqlite3Fts5TermsetFree(Fts5Termset *p){
+  if( p ){
+    int i;
+    for(i=0; i<ArraySize(p->apHash); i++){
+      Fts5TermsetEntry *pEntry = p->apHash[i];
+      while( pEntry ){
+        Fts5TermsetEntry *pDel = pEntry;
+        pEntry = pEntry->pNext;
+        sqlite3_free(pDel);
+      }
+    }
+    sqlite3_free(p);
+  }
+}
+
 
 

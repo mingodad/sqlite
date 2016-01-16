@@ -328,7 +328,6 @@ static int lookupName(
         }
         if( iCol>=pTab->nCol && sqlite3IsRowid(zCol) && VisibleRowid(pTab) ){
           /* IMP: R-51414-32910 */
-          /* IMP: R-44911-55124 */
           iCol = -1;
         }
         if( iCol<pTab->nCol ){
@@ -355,10 +354,15 @@ static int lookupName(
     /*
     ** Perhaps the name is a reference to the ROWID
     */
-    if( cnt==0 && cntTab==1 && pMatch && sqlite3IsRowid(zCol)
-     && VisibleRowid(pMatch->pTab) ){
+    if( cnt==0
+     && cntTab==1
+     && pMatch
+     && (pNC->ncFlags & NC_IdxExpr)==0
+     && sqlite3IsRowid(zCol)
+     && VisibleRowid(pMatch->pTab)
+    ){
       cnt = 1;
-      pExpr->iColumn = -1;     /* IMP: R-44911-55124 */
+      pExpr->iColumn = -1;
       pExpr->affinity = SQLITE_AFF_INTEGER;
     }
 
@@ -661,7 +665,7 @@ static int resolveExprStep(Walker *pWalker, Expr *pExpr){
           wrong_num_args = 1;
         }
       }else{
-        is_agg = pDef->xFunc==0;
+        is_agg = pDef->xFinalize!=0;
         if( pDef->funcFlags & SQLITE_FUNC_UNLIKELY ){
           ExprSetProperty(pExpr, EP_Unlikely|EP_Skip);
           if( n==2 ){
@@ -1418,9 +1422,10 @@ int sqlite3ResolveExprListNames(
   ExprList *pList         /* The expression list to be analyzed. */
 ){
   int i;
-  assert( pList!=0 );
-  for(i=0; i<pList->nExpr; i++){
-    if( sqlite3ResolveExprNames(pNC, pList->a[i].pExpr) ) return WRC_Abort;
+  if( pList ){
+    for(i=0; i<pList->nExpr; i++){
+      if( sqlite3ResolveExprNames(pNC, pList->a[i].pExpr) ) return WRC_Abort;
+    }
   }
   return WRC_Continue;
 }

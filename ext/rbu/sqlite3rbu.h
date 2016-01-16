@@ -269,6 +269,10 @@
 
 #include "sqlite3.h"              /* Required for error code definitions */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct sqlite3rbu sqlite3rbu;
 
 /*
@@ -337,6 +341,9 @@ sqlite3rbu *sqlite3rbu_open(
 ** If an error has occurred, either while opening or stepping the RBU object,
 ** this function may return NULL. The error code and message may be collected
 ** when sqlite3rbu_close() is called.
+**
+** Database handles returned by this function remain valid until the next
+** call to any sqlite3rbu_xxx() function other than sqlite3rbu_db().
 */
 sqlite3 *sqlite3rbu_db(sqlite3rbu*, int bRbu);
 
@@ -446,5 +453,9 @@ int sqlite3rbu_create_vfs(const char *zName, const char *zParent);
 ** are undefined.
 */
 void sqlite3rbu_destroy_vfs(const char *zName);
+
+#ifdef __cplusplus
+}  /* end of the 'extern "C"' block */
+#endif
 
 #endif /* _SQLITE3RBU_H */

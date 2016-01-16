@@ -50,7 +50,9 @@ struct sqlite3_mutex {
 #endif
 };
 #if SQLITE_MUTEX_NREF
-#define SQLITE3_MUTEX_INITIALIZER { PTHREAD_MUTEX_INITIALIZER, 0, 0, (pthread_t)0, 0 }
+#define SQLITE3_MUTEX_INITIALIZER {PTHREAD_MUTEX_INITIALIZER,0,0,(pthread_t)0,0}
+#elif defined(SQLITE_ENABLE_API_ARMOR)
+#define SQLITE3_MUTEX_INITIALIZER { PTHREAD_MUTEX_INITIALIZER, 0 }
 #else
 #define SQLITE3_MUTEX_INITIALIZER { PTHREAD_MUTEX_INITIALIZER }
 #endif
@@ -81,14 +83,15 @@ static int pthreadMutexNotheld(sqlite3_mutex *p){
 #endif
 
 /*
-** Try to provide a memory barrier operation, needed for initialization only.
+** Try to provide a memory barrier operation, needed for initialization
+** and also for the implementation of xShmBarrier in the VFS in cases
+** where SQLite is compiled without mutexes.
 */
 void sqlite3MemoryBarrier(void){
-#if defined(__GNUC__)
-  __sync_synchronize();
-#endif
-#ifdef SQLITE_MEMORY_BARRIER
+#if defined(SQLITE_MEMORY_BARRIER)
   SQLITE_MEMORY_BARRIER;
+#elif defined(__GNUC__) && GCC_VERSION>=4001000
+  __sync_synchronize();
 #endif
 }
 

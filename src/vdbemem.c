@@ -1224,7 +1224,7 @@ static int valueFromFunction(
   memset(&ctx, 0, sizeof(ctx));
   ctx.pOut = pVal;
   ctx.pFunc = pFunc;
-  pFunc->xFunc(&ctx, nVal, apVal);
+  pFunc->xSFunc(&ctx, nVal, apVal);
   if( ctx.isError ){
     rc = ctx.isError;
     sqlite3ErrorMsg(pCtx->pParse, "%s", sqlite3_value_text(pVal));
@@ -1427,17 +1427,16 @@ static void recordFunc(
   sqlite3_value **argv
 ){
   const int file_format = 1;
-  int iSerial;                    /* Serial type */
+  u32 iSerial;                    /* Serial type */
   int nSerial;                    /* Bytes of space for iSerial as varint */
-  int nVal;                       /* Bytes of space required for argv[0] */
+  u32 nVal;                       /* Bytes of space required for argv[0] */
   int nRet;
   sqlite3 *db;
   u8 *aRet;
 
   UNUSED_PARAMETER( argc );
-  iSerial = sqlite3VdbeSerialType(argv[0], file_format);
+  iSerial = sqlite3VdbeSerialType(argv[0], file_format, &nVal);
   nSerial = sqlite3VarintLen(iSerial);
-  nVal = sqlite3VdbeSerialTypeLen(iSerial);
   db = sqlite3_context_db_handle(context);
 
   nRet = 1 + nSerial + nVal;

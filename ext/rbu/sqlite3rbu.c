@@ -89,6 +89,10 @@
 #if !defined(SQLITE_CORE) || defined(SQLITE_ENABLE_RBU)
 #include "sqlite3rbu.h"
 
+#if defined(_WIN32_WCE)
+#include "windows.h"
+#endif
+
 /* Maximum number of prepared UPDATE statements held by this module */
 #define SQLITE_RBU_UPDATE_CACHESIZE 16
 
@@ -931,7 +935,7 @@ static void *rbuMalloc(sqlite3rbu *p, int nByte){
   void *pRet = 0;
   if( p->rc==SQLITE_OK ){
     assert( nByte>0 );
-    pRet = sqlite3_malloc(nByte);
+    pRet = sqlite3_malloc64(nByte);
     if( pRet==0 ){
       p->rc = SQLITE_NOMEM;
     }else{
@@ -977,8 +981,8 @@ static char *rbuStrndup(const char *zStr, int *pRc){
 
   assert( *pRc==SQLITE_OK );
   if( zStr ){
-    int nCopy = strlen(zStr) + 1;
-    zRet = (char*)sqlite3_malloc(nCopy);
+    size_t nCopy = strlen(zStr) + 1;
+    zRet = (char*)sqlite3_malloc64(nCopy);
     if( zRet ){
       memcpy(zRet, zStr, nCopy);
     }else{
@@ -2326,7 +2330,7 @@ static int rbuCaptureWalRead(sqlite3rbu *pRbu, i64 iOff, int iAmt){
   if( pRbu->nFrame==pRbu->nFrameAlloc ){
     int nNew = (pRbu->nFrameAlloc ? pRbu->nFrameAlloc : 64) * 2;
     RbuFrame *aNew;
-    aNew = (RbuFrame*)sqlite3_realloc(pRbu->aFrame, nNew * sizeof(RbuFrame));
+    aNew = (RbuFrame*)sqlite3_realloc64(pRbu->aFrame, nNew * sizeof(RbuFrame));
     if( aNew==0 ) return SQLITE_NOMEM;
     pRbu->aFrame = aNew;
     pRbu->nFrameAlloc = nNew;
@@ -2382,6 +2386,30 @@ static void rbuLockDatabase(sqlite3rbu *p){
   }
 }
 
+#if defined(_WIN32_WCE)
+static LPWSTR rbuWinUtf8ToUnicode(const char *zFilename){
+  int nChar;
+  LPWSTR zWideFilename;
+
+  nChar = MultiByteToWideChar(CP_UTF8, 0, zFilename, -1, NULL, 0);
+  if( nChar==0 ){
+    return 0;
+  }
+  zWideFilename = sqlite3_malloc64( nChar*sizeof(zWideFilename[0]) );
+  if( zWideFilename==0 ){
+    return 0;
+  }
+  memset(zWideFilename, 0, nChar*sizeof(zWideFilename[0]));
+  nChar = MultiByteToWideChar(CP_UTF8, 0, zFilename, -1, zWideFilename,
+                                nChar);
+  if( nChar==0 ){
+    sqlite3_free(zWideFilename);
+    zWideFilename = 0;
+  }
+  return zWideFilename;
+}
+#endif
+
 /*
 ** The RBU handle is currently in RBU_STAGE_OAL state, with a SHARED lock
 ** on the database file. This proc moves the *-oal file to the *-wal path,
@@ -2416,10 +2444,37 @@ static void rbuMoveOalFile(sqlite3rbu *p){
       rbuObjIterFinalize(&p->objiter);
       sqlite3_close(p->dbMain);
       sqlite3_close(p->dbRbu);
+      p->dbMain = 0;
+      p->dbRbu = 0;
+
+#if defined(_WIN32_WCE)
+      {
+        LPWSTR zWideOal;
+        LPWSTR zWideWal;
+
+        zWideOal = rbuWinUtf8ToUnicode(zOal);
+        if( zWideOal ){
+          zWideWal = rbuWinUtf8ToUnicode(zWal);
+          if( zWideWal ){
+            if( MoveFileW(zWideOal, zWideWal) ){
+              p->rc = SQLITE_OK;
+            }else{
+              p->rc = SQLITE_IOERR;
+            }
+            sqlite3_free(zWideWal);
+          }else{
+            p->rc = SQLITE_IOERR_NOMEM;
+          }
+          sqlite3_free(zWideOal);
+        }else{
+          p->rc = SQLITE_IOERR_NOMEM;
+        }
+      }
+#else
       p->rc = rename(zOal, zWal) ? SQLITE_IOERR : SQLITE_OK;
+#endif
+
       if( p->rc==SQLITE_OK ){
-        p->dbMain = 0;
-        p->dbRbu = 0;
         rbuOpenDatabase(p);
         rbuSetupCheckpoint(p, 0);
       }
@@ -2974,11 +3029,12 @@ sqlite3rbu *sqlite3rbu_open(
   const char *zState
 ){
   sqlite3rbu *p;
-  int nTarget = strlen(zTarget);
-  int nRbu = strlen(zRbu);
-  int nState = zState ? strlen(zState) : 0;
+  size_t nTarget = strlen(zTarget);
+  size_t nRbu = strlen(zRbu);
+  size_t nState = zState ? strlen(zState) : 0;
+  size_t nByte = sizeof(sqlite3rbu) + nTarget+1 + nRbu+1+ nState+1;
 
-  p = (sqlite3rbu*)sqlite3_malloc(sizeof(sqlite3rbu)+nTarget+1+nRbu+1+nState+1);
+  p = (sqlite3rbu*)sqlite3_malloc64(nByte);
   if( p ){
     RbuState *pState = 0;
 
@@ -3115,7 +3171,7 @@ sqlite3 *sqlite3rbu_db(sqlite3rbu *pRbu, int bRbu){
 static void rbuEditErrmsg(sqlite3rbu *p){
   if( p->rc==SQLITE_CONSTRAINT && p->zErrmsg ){
     int i;
-    int nErrmsg = strlen(p->zErrmsg);
+    size_t nErrmsg = strlen(p->zErrmsg);
     for(i=0; i<(nErrmsg-8); i++){
       if( memcmp(&p->zErrmsg[i], "rbu_imp_", 8)==0 ){
         int nDel = 8;
@@ -3579,7 +3635,7 @@ static int rbuVfsShmMap(
   if( eStage==RBU_STAGE_OAL || eStage==RBU_STAGE_MOVE ){
     if( iRegion<=p->nShm ){
       int nByte = (iRegion+1) * sizeof(char*);
-      char **apNew = (char**)sqlite3_realloc(p->apShm, nByte);
+      char **apNew = (char**)sqlite3_realloc64(p->apShm, nByte);
       if( apNew==0 ){
         rc = SQLITE_NOMEM;
       }else{
@@ -3590,7 +3646,7 @@ static int rbuVfsShmMap(
     }
 
     if( rc==SQLITE_OK && p->apShm[iRegion]==0 ){
-      char *pNew = (char*)sqlite3_malloc(szRegion);
+      char *pNew = (char*)sqlite3_malloc64(szRegion);
       if( pNew==0 ){
         rc = SQLITE_NOMEM;
       }else{
@@ -3700,7 +3756,7 @@ static int rbuVfsOpen(
       ** the name of the *-wal file this db connection will use. SQLite
       ** happens to pass a pointer to this buffer when using xAccess()
       ** or xOpen() to operate on the *-wal file.  */
-      int n = strlen(zName);
+      int n = (int)strlen(zName);
       const char *z = &zName[n];
       if( flags & SQLITE_OPEN_URI ){
         int odd = 0;
@@ -3726,8 +3782,8 @@ static int rbuVfsOpen(
           ** code ensures that the string passed to xOpen() is terminated by a
           ** pair of '\0' bytes in case the VFS attempts to extract a URI 
           ** parameter from it.  */
-          int nCopy = strlen(zName);
-          char *zCopy = sqlite3_malloc(nCopy+2);
+          size_t nCopy = strlen(zName);
+          char *zCopy = sqlite3_malloc64(nCopy+2);
           if( zCopy ){
             memcpy(zCopy, zName, nCopy);
             zCopy[nCopy-3] = 'o';
@@ -3956,13 +4012,13 @@ int sqlite3rbu_create_vfs(const char *zName, const char *zParent){
   };
 
   rbu_vfs *pNew = 0;              /* Newly allocated VFS */
-  int nName;
   int rc = SQLITE_OK;
+  size_t nName;
+  size_t nByte;
 
-  int nByte;
   nName = strlen(zName);
   nByte = sizeof(rbu_vfs) + nName + 1;
-  pNew = (rbu_vfs*)sqlite3_malloc(nByte);
+  pNew = (rbu_vfs*)sqlite3_malloc64(nByte);
   if( pNew==0 ){
     rc = SQLITE_NOMEM;
   }else{

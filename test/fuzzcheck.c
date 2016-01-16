@@ -70,6 +70,9 @@
 #include <stdarg.h>
 #include <ctype.h>
 #include "sqlite3.h"
+#define ISSPACE(X) isspace((unsigned char)(X))
+#define ISDIGIT(X) isdigit((unsigned char)(X))
+
 
 #ifdef __unix__
 # include <signal.h>
@@ -295,6 +298,38 @@ static void readfileFunc(
   }
   fclose(in);
 }
+
+/*
+** Implementation of the "writefile(X,Y)" SQL function.  The argument Y
+** is written into file X.  The number of bytes written is returned.  Or
+** NULL is returned if something goes wrong, such as being unable to open
+** file X for writing.
+*/
+static void writefileFunc(
+  sqlite3_context *context,
+  int argc,
+  sqlite3_value **argv
+){
+  FILE *out;
+  const char *z;
+  sqlite3_int64 rc;
+  const char *zFile;
+
+  (void)argc;
+  zFile = (const char*)sqlite3_value_text(argv[0]);
+  if( zFile==0 ) return;
+  out = fopen(zFile, "wb");
+  if( out==0 ) return;
+  z = (const char*)sqlite3_value_blob(argv[1]);
+  if( z==0 ){
+    rc = 0;
+  }else{
+    rc = fwrite(z, 1, sqlite3_value_bytes(argv[1]), out);
+  }
+  fclose(out);
+  sqlite3_result_int64(context, rc);
+}
+
 
 /*
 ** Load a list of Blob objects from the database
@@ -553,18 +588,13 @@ static int inmemFullPathname(
   return SQLITE_OK;
 }
 
-/* GetLastError() is never used */
-static int inmemGetLastError(sqlite3_vfs *pVfs, int n, char *z){
-  return SQLITE_OK;
-}
-
 /*
 ** Register the VFS that reads from the g.aFile[] set of files.
 */
 static void inmemVfsRegister(void){
   static sqlite3_vfs inmemVfs;
   sqlite3_vfs *pDefault = sqlite3_vfs_find(0);
-  inmemVfs.iVersion = 1;
+  inmemVfs.iVersion = 3;
   inmemVfs.szOsFile = sizeof(VHandle);
   inmemVfs.mxPathname = 200;
   inmemVfs.zName = "inmem";
@@ -574,8 +604,7 @@ static void inmemVfsRegister(void){
   inmemVfs.xFullPathname = inmemFullPathname;
   inmemVfs.xRandomness = pDefault->xRandomness;
   inmemVfs.xSleep = pDefault->xSleep;
-  inmemVfs.xCurrentTime = pDefault->xCurrentTime;
-  inmemVfs.xGetLastError = inmemGetLastError;
+  inmemVfs.xCurrentTimeInt64 = pDefault->xCurrentTimeInt64;
   sqlite3_vfs_register(&inmemVfs, 0);
 };
 
@@ -601,9 +630,9 @@ static void runSql(sqlite3 *db, const char *zSql, unsigned  runFlags){
     if( runFlags & SQL_TRACE ){
       const char *z = zSql;
       int n;
-      while( z<zMore && isspace(z[0]) ) z++;
+      while( z<zMore && ISSPACE(z[0]) ) z++;
       n = (int)(zMore - z);
-      while( n>0 && isspace(z[n-1]) ) n--;
+      while( n>0 && ISSPACE(z[n-1]) ) n--;
       if( n==0 ) break;
       if( pStmt==0 ){
         printf("TRACE: %.*s (error: %s)\n", n, z, sqlite3_errmsg(db));
@@ -725,7 +754,7 @@ static int integerValue(const char *zArg){
       zArg++;
     }
   }else{
-    while( isdigit(zArg[0]) ){
+    while( ISDIGIT(zArg[0]) ){
       v = v*10 + zArg[0] - '0';
       zArg++;
     }
@@ -751,6 +780,8 @@ static void showHelp(void){
 "Options:\n"
 "  --cell-size-check     Set the PRAGMA cell_size_check=ON\n"
 "  --dbid N              Use only the database where dbid=N\n"
+"  --export-db DIR       Write databases to files(s) in DIR. Works with --dbid\n"
+"  --export-sql DIR      Write SQL to file(s) in DIR. Also works with --sqlid\n"
 "  --help                Show this help text\n"
 "  -q                    Reduced output\n"
 "  --quiet               Reduced output\n"
@@ -763,7 +794,7 @@ static void showHelp(void){
 "  --rebuild             Rebuild and vacuum the database file\n"
 "  --result-trace        Show the results of each SQL command\n"
 "  --sqlid N             Use only SQL where sqlid=N\n"
-"  --timeline N          Abort if any single test case needs more than N seconds\n"
+"  --timeout N           Abort if any single test case needs more than N seconds\n"
 "  -v                    Increased output\n"
 "  --verbose             Increased output\n"
   );
@@ -799,6 +830,9 @@ int main(int argc, char **argv){
   int sqlFuzz = 0;             /* True for SQL fuzz testing. False for DB fuzz */
   int iTimeout = 120;          /* Default 120-second timeout */
   int nMem = 0;                /* Memory limit */
+  char *zExpDb = 0;            /* Write Databases to files in this directory */
+  char *zExpSql = 0;           /* Write SQL to files in this directory */
+  void *pHeap = 0;             /* Heap for use by SQLite */
 
   iBegin = timeOfDay();
 #ifdef __unix__
@@ -818,13 +852,26 @@ int main(int argc, char **argv){
         if( i>=argc-1 ) fatalError("missing arguments on %s", argv[i]);
         onlyDbid = integerValue(argv[++i]);
       }else
+      if( strcmp(z,"export-db")==0 ){
+        if( i>=argc-1 ) fatalError("missing arguments on %s", argv[i]);
+        zExpDb = argv[++i];
+      }else
+      if( strcmp(z,"export-sql")==0 ){
+        if( i>=argc-1 ) fatalError("missing arguments on %s", argv[i]);
+        zExpSql = argv[++i];
+      }else
       if( strcmp(z,"help")==0 ){
         showHelp();
         return 0;
       }else
       if( strcmp(z,"limit-mem")==0 ){
+#if !defined(SQLITE_ENABLE_MEMSYS3) && !defined(SQLITE_ENABLE_MEMSYS5)
+        fatalError("the %s option requires -DSQLITE_ENABLE_MEMSYS5 or _MEMSYS3",
+                   argv[i]);
+#else
         if( i>=argc-1 ) fatalError("missing arguments on %s", argv[i]);
         nMem = integerValue(argv[++i]);
+#endif
       }else
       if( strcmp(z,"limit-vdbe")==0 ){
         vdbeLimitFlag = 1;
@@ -943,6 +990,50 @@ int main(int argc, char **argv){
       sqlite3_close(db);
       return 0;
     }
+    if( zExpDb!=0 || zExpSql!=0 ){
+      sqlite3_create_function(db, "writefile", 2, SQLITE_UTF8, 0,
+                              writefileFunc, 0, 0);
+      if( zExpDb!=0 ){
+        const char *zExDb = 
+          "SELECT writefile(printf('%s/db%06d.db',?1,dbid),dbcontent),"
+          "       dbid, printf('%s/db%06d.db',?1,dbid), length(dbcontent)"
+          "  FROM db WHERE ?2<0 OR dbid=?2;";
+        rc = sqlite3_prepare_v2(db, zExDb, -1, &pStmt, 0);
+        if( rc ) fatalError("cannot prepare statement [%s]: %s",
+                            zExDb, sqlite3_errmsg(db));
+        sqlite3_bind_text64(pStmt, 1, zExpDb, strlen(zExpDb),
+                            SQLITE_STATIC, SQLITE_UTF8);
+        sqlite3_bind_int(pStmt, 2, onlyDbid);
+        while( sqlite3_step(pStmt)==SQLITE_ROW ){
+          printf("write db-%d (%d bytes) into %s\n",
+             sqlite3_column_int(pStmt,1),
+             sqlite3_column_int(pStmt,3),
+             sqlite3_column_text(pStmt,2));
+        }
+        sqlite3_finalize(pStmt);
+      }
+      if( zExpSql!=0 ){
+        const char *zExSql = 
+          "SELECT writefile(printf('%s/sql%06d.txt',?1,sqlid),sqltext),"
+          "       sqlid, printf('%s/sql%06d.txt',?1,sqlid), length(sqltext)"
+          "  FROM xsql WHERE ?2<0 OR sqlid=?2;";
+        rc = sqlite3_prepare_v2(db, zExSql, -1, &pStmt, 0);
+        if( rc ) fatalError("cannot prepare statement [%s]: %s",
+                            zExSql, sqlite3_errmsg(db));
+        sqlite3_bind_text64(pStmt, 1, zExpSql, strlen(zExpSql),
+                            SQLITE_STATIC, SQLITE_UTF8);
+        sqlite3_bind_int(pStmt, 2, onlySqlid);
+        while( sqlite3_step(pStmt)==SQLITE_ROW ){
+          printf("write sql-%d (%d bytes) into %s\n",
+             sqlite3_column_int(pStmt,1),
+             sqlite3_column_int(pStmt,3),
+             sqlite3_column_text(pStmt,2));
+        }
+        sqlite3_finalize(pStmt);
+      }
+      sqlite3_close(db);
+      return 0;
+    }
   
     /* Load all SQL script content and all initial database images from the
     ** source db
@@ -963,7 +1054,6 @@ int main(int argc, char **argv){
   
     /* Print the description, if there is one */
     if( !quietFlag ){
-      int i;
       zDbName = azSrcDb[iSrcDb];
       i = strlen(zDbName) - 1;
       while( i>0 && zDbName[i-1]!='/' && zDbName[i-1]!='\\' ){ i--; }
@@ -995,7 +1085,6 @@ int main(int argc, char **argv){
 
     /* Limit available memory, if requested */
     if( nMem>0 ){
-      void *pHeap;
       sqlite3_shutdown();
       pHeap = malloc(nMem);
       if( pHeap==0 ){
@@ -1094,5 +1183,6 @@ int main(int argc, char **argv){
            sqlite3_libversion(), sqlite3_sourceid());
   }
   free(azSrcDb);
+  free(pHeap);
   return 0;
 }

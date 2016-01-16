@@ -937,7 +937,9 @@ int sqlite3VtabBegin(sqlite3 *db, VTable *pVTab){
     if( rc==SQLITE_OK ){
       rc = pModule->xBegin(pVTab->pVtab);
       if( rc==SQLITE_OK ){
+        int iSvpt = db->nStatement + db->nSavepoint;
         addToVTrans(db, pVTab);
+        if( iSvpt ) rc = sqlite3VtabSavepoint(db, SAVEPOINT_BEGIN, iSvpt-1);
       }
     }
   }
@@ -1014,7 +1016,7 @@ FuncDef *sqlite3VtabOverloadFunction(
   Table *pTab;
   sqlite3_vtab *pVtab;
   sqlite3_module *pMod;
-  void (*xFunc)(sqlite3_context*,int,sqlite3_value**) = 0;
+  void (*xSFunc)(sqlite3_context*,int,sqlite3_value**) = 0;
   void *pArg = 0;
   FuncDef *pNew;
   int rc = 0;
@@ -1042,7 +1044,7 @@ FuncDef *sqlite3VtabOverloadFunction(
     for(z=(unsigned char*)zLowerName; *z; z++){
       *z = sqlite3UpperToLower[*z];
     }
-    rc = pMod->xFindFunction(pVtab, nArg, zLowerName, &xFunc, &pArg);
+    rc = pMod->xFindFunction(pVtab, nArg, zLowerName, &xSFunc, &pArg);
     sqlite3DbFree(db, zLowerName);
   }
   if( rc==0 ){
@@ -1059,7 +1061,7 @@ FuncDef *sqlite3VtabOverloadFunction(
   *pNew = *pDef;
   pNew->zName = (char *)&pNew[1];
   memcpy(pNew->zName, pDef->zName, sqlite3Strlen30(pDef->zName)+1);
-  pNew->xFunc = xFunc;
+  pNew->xSFunc = xSFunc;
   pNew->pUserData = pArg;
   pNew->funcFlags |= SQLITE_FUNC_EPHEM;
   return pNew;
@@ -1143,7 +1145,7 @@ int sqlite3VtabEponymousTableInit(Parse *pParse, Module *pMod){
 */
 void sqlite3VtabEponymousTableClear(sqlite3 *db, Module *pMod){
   Table *pTab = pMod->pEpoTab;
-  if( (pTab = pMod->pEpoTab)!=0 ){
+  if( pTab!=0 ){
     sqlite3DeleteColumnNames(db, pTab);
     sqlite3VtabClear(db, pTab);
     sqlite3DbFree(db, pTab);

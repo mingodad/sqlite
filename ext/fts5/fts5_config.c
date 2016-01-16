@@ -14,12 +14,12 @@
 */
 
 
-
 #include "fts5Int.h"
 
 #define FTS5_DEFAULT_PAGE_SIZE   4050
 #define FTS5_DEFAULT_AUTOMERGE      4
 #define FTS5_DEFAULT_CRISISMERGE   16
+#define FTS5_DEFAULT_HASHSIZE    (1024*1024)
 
 /* Maximum allowed page size */
 #define FTS5_MAX_PAGE_SIZE (128*1024)
@@ -194,6 +194,33 @@ void sqlite3Fts5Dequote(char *z){
   }
 }
 
+
+struct Fts5Enum {
+  const char *zName;
+  int eVal;
+};
+typedef struct Fts5Enum Fts5Enum;
+
+static int fts5ConfigSetEnum(
+  const Fts5Enum *aEnum, 
+  const char *zEnum, 
+  int *peVal
+){
+  int nEnum = strlen(zEnum);
+  int i;
+  int iVal = -1;
+
+  for(i=0; aEnum[i].zName; i++){
+    if( sqlite3_strnicmp(aEnum[i].zName, zEnum, nEnum)==0 ){
+      if( iVal>=0 ) return SQLITE_ERROR;
+      iVal = aEnum[i].eVal;
+    }
+  }
+
+  *peVal = iVal;
+  return iVal<0 ? SQLITE_ERROR : SQLITE_OK;
+}
+
 /*
 ** Parse a "special" CREATE VIRTUAL TABLE directive and update
 ** configuration object pConfig as appropriate.
@@ -211,44 +238,63 @@ static int fts5ConfigParseSpecial(
   char **pzErr                    /* OUT: Error message */
 ){
   int rc = SQLITE_OK;
-  int nCmd = strlen(zCmd);
+  int nCmd = (int)strlen(zCmd);
   if( sqlite3_strnicmp("prefix", zCmd, nCmd)==0 ){
     const int nByte = sizeof(int) * FTS5_MAX_PREFIX_INDEXES;
     const char *p;
-    if( pConfig->aPrefix ){
-      *pzErr = sqlite3_mprintf("multiple prefix=... directives");
-      rc = SQLITE_ERROR;
-    }else{
+    int bFirst = 1;
+    if( pConfig->aPrefix==0 ){
       pConfig->aPrefix = sqlite3Fts5MallocZero(&rc, nByte);
+      if( rc ) return rc;
     }
+
     p = zArg;
-    while( rc==SQLITE_OK && p[0] ){
+    while( 1 ){
       int nPre = 0;
+
       while( p[0]==' ' ) p++;
+      if( bFirst==0 && p[0]==',' ){
+        p++;
+        while( p[0]==' ' ) p++;
+      }else if( p[0]=='\0' ){
+        break;
+      }
+      if( p[0]<'0' || p[0]>'9' ){
+        *pzErr = sqlite3_mprintf("malformed prefix=... directive");
+        rc = SQLITE_ERROR;
+        break;
+      }
+
+      if( pConfig->nPrefix==FTS5_MAX_PREFIX_INDEXES ){
+        *pzErr = sqlite3_mprintf(
+            "too many prefix indexes (max %d)", FTS5_MAX_PREFIX_INDEXES
+        );
+        rc = SQLITE_ERROR;
+        break;
+      }
+
       while( p[0]>='0' && p[0]<='9' && nPre<1000 ){
         nPre = nPre*10 + (p[0] - '0');
         p++;
       }
-      while( p[0]==' ' ) p++;
-      if( p[0]==',' ){
-        p++;
-      }else if( p[0] ){
-        *pzErr = sqlite3_mprintf("malformed prefix=... directive");
+
+      if( rc==SQLITE_OK && (nPre<=0 || nPre>=1000) ){
+        *pzErr = sqlite3_mprintf("prefix length out of range (max 999)");
         rc = SQLITE_ERROR;
+        break;
       }
-      if( rc==SQLITE_OK && (nPre==0 || nPre>=1000) ){
-        *pzErr = sqlite3_mprintf("prefix length out of range: %d", nPre);
-        rc = SQLITE_ERROR;
-      }
+
       pConfig->aPrefix[pConfig->nPrefix] = nPre;
       pConfig->nPrefix++;
+      bFirst = 0;
     }
+    assert( pConfig->nPrefix<=FTS5_MAX_PREFIX_INDEXES );
     return rc;
   }
 
   if( sqlite3_strnicmp("tokenize", zCmd, nCmd)==0 ){
     const char *p = (const char*)zArg;
-    int nArg = strlen(zArg) + 1;
+    int nArg = (int)strlen(zArg) + 1;
     char **azArg = sqlite3Fts5MallocZero(&rc, sizeof(char*) * nArg);
     char *pDel = sqlite3Fts5MallocZero(&rc, nArg * 2);
     char *pSpace = pDel;
@@ -325,6 +371,20 @@ static int fts5ConfigParseSpecial(
     return rc;
   }
 
+  if( sqlite3_strnicmp("detail", zCmd, nCmd)==0 ){
+    const Fts5Enum aDetail[] = {
+      { "none", FTS5_DETAIL_NONE },
+      { "full", FTS5_DETAIL_FULL },
+      { "columns", FTS5_DETAIL_COLUMNS },
+      { 0, 0 }
+    };
+
+    if( (rc = fts5ConfigSetEnum(aDetail, zArg, &pConfig->eDetail)) ){
+      *pzErr = sqlite3_mprintf("malformed detail=... directive");
+    }
+    return rc;
+  }
+
   *pzErr = sqlite3_mprintf("unrecognized option: \"%.*s\"", nCmd, zCmd);
   return SQLITE_ERROR;
 }
@@ -364,7 +424,7 @@ static const char *fts5ConfigGobbleWord(
 ){
   const char *zRet = 0;
 
-  int nIn = strlen(zIn);
+  int nIn = (int)strlen(zIn);
   char *zOut = sqlite3_malloc(nIn+1);
 
   assert( *pRc==SQLITE_OK );
@@ -480,6 +540,10 @@ int sqlite3Fts5ConfigParse(
   pRet->zDb = sqlite3Fts5Strndup(&rc, azArg[1], -1);
   pRet->zName = sqlite3Fts5Strndup(&rc, azArg[2], -1);
   pRet->bColumnsize = 1;
+  pRet->eDetail = FTS5_DETAIL_FULL;
+#ifdef SQLITE_DEBUG
+  pRet->bPrefixIndex = 1;
+#endif
   if( rc==SQLITE_OK && sqlite3_stricmp(pRet->zName, FTS5_RANK_NAME)==0 ){
     *pzErr = sqlite3_mprintf("reserved fts5 table name: %s", pRet->zName);
     rc = SQLITE_ERROR;
@@ -703,33 +767,37 @@ int sqlite3Fts5ConfigParseRank(
   *pzRank = 0;
   *pzRankArgs = 0;
 
-  p = fts5ConfigSkipWhitespace(p);
-  pRank = p;
-  p = fts5ConfigSkipBareword(p);
-
-  if( p ){
-    zRank = sqlite3Fts5MallocZero(&rc, 1 + p - pRank);
-    if( zRank ) memcpy(zRank, pRank, p-pRank);
-  }else{
+  if( p==0 ){
     rc = SQLITE_ERROR;
-  }
+  }else{
+    p = fts5ConfigSkipWhitespace(p);
+    pRank = p;
+    p = fts5ConfigSkipBareword(p);
 
-  if( rc==SQLITE_OK ){
-    p = fts5ConfigSkipWhitespace(p);
-    if( *p!='(' ) rc = SQLITE_ERROR;
-    p++;
-  }
-  if( rc==SQLITE_OK ){
-    const char *pArgs; 
-    p = fts5ConfigSkipWhitespace(p);
-    pArgs = p;
-    if( *p!=')' ){
-      p = fts5ConfigSkipArgs(p);
-      if( p==0 ){
-        rc = SQLITE_ERROR;
-      }else{
-        zRankArgs = sqlite3Fts5MallocZero(&rc, 1 + p - pArgs);
-        if( zRankArgs ) memcpy(zRankArgs, pArgs, p-pArgs);
+    if( p ){
+      zRank = sqlite3Fts5MallocZero(&rc, 1 + p - pRank);
+      if( zRank ) memcpy(zRank, pRank, p-pRank);
+    }else{
+      rc = SQLITE_ERROR;
+    }
+
+    if( rc==SQLITE_OK ){
+      p = fts5ConfigSkipWhitespace(p);
+      if( *p!='(' ) rc = SQLITE_ERROR;
+      p++;
+    }
+    if( rc==SQLITE_OK ){
+      const char *pArgs; 
+      p = fts5ConfigSkipWhitespace(p);
+      pArgs = p;
+      if( *p!=')' ){
+        p = fts5ConfigSkipArgs(p);
+        if( p==0 ){
+          rc = SQLITE_ERROR;
+        }else{
+          zRankArgs = sqlite3Fts5MallocZero(&rc, 1 + p - pArgs);
+          if( zRankArgs ) memcpy(zRankArgs, pArgs, p-pArgs);
+        }
       }
     }
   }
@@ -761,6 +829,18 @@ int sqlite3Fts5ConfigSetValue(
       *pbBadkey = 1;
     }else{
       pConfig->pgsz = pgsz;
+    }
+  }
+
+  else if( 0==sqlite3_stricmp(zKey, "hashsize") ){
+    int nHashSize = -1;
+    if( SQLITE_INTEGER==sqlite3_value_numeric_type(pVal) ){
+      nHashSize = sqlite3_value_int(pVal);
+    }
+    if( nHashSize<=0 ){
+      *pbBadkey = 1;
+    }else{
+      pConfig->nHashSize = nHashSize;
     }
   }
 
@@ -824,6 +904,7 @@ int sqlite3Fts5ConfigLoad(Fts5Config *pConfig, int iCookie){
   pConfig->pgsz = FTS5_DEFAULT_PAGE_SIZE;
   pConfig->nAutomerge = FTS5_DEFAULT_AUTOMERGE;
   pConfig->nCrisisMerge = FTS5_DEFAULT_CRISISMERGE;
+  pConfig->nHashSize = FTS5_DEFAULT_HASHSIZE;
 
   zSql = sqlite3Fts5Mprintf(&rc, zSelect, pConfig->zDb, pConfig->zName);
   if( zSql ){

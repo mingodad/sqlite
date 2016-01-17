@@ -376,9 +376,9 @@ static void fts5SnippetFunction(
 typedef struct Fts5Bm25Data Fts5Bm25Data;
 struct Fts5Bm25Data {
   int nPhrase;                    /* Number of phrases in query */
-  double avgdl;                   /* Average number of tokens in each row */
-  double *aIDF;                   /* IDF for each phrase */
-  double *aFreq;                  /* Array used to calculate phrase freq. */
+  sqlite_double avgdl;                   /* Average number of tokens in each row */
+  sqlite_double *aIDF;                   /* IDF for each phrase */
+  sqlite_double *aFreq;                  /* Array used to calculate phrase freq. */
 };
 
 /*
@@ -418,21 +418,21 @@ static int fts5Bm25GetData(
 
     /* Allocate the Fts5Bm25Data object */
     nPhrase = pApi->xPhraseCount(pFts);
-    nByte = sizeof(Fts5Bm25Data) + nPhrase*2*sizeof(double);
+    nByte = sizeof(Fts5Bm25Data) + nPhrase*2*sizeof(sqlite_double);
     p = (Fts5Bm25Data*)sqlite3_malloc(nByte);
     if( p==0 ){
       rc = SQLITE_NOMEM;
     }else{
       memset(p, 0, nByte);
       p->nPhrase = nPhrase;
-      p->aIDF = (double*)&p[1];
+      p->aIDF = (sqlite_double*)&p[1];
       p->aFreq = &p->aIDF[nPhrase];
     }
 
     /* Calculate the average document length for this FTS5 table */
     if( rc==SQLITE_OK ) rc = pApi->xRowCount(pFts, &nRow);
     if( rc==SQLITE_OK ) rc = pApi->xColumnTotalSize(pFts, -1, &nToken);
-    if( rc==SQLITE_OK ) p->avgdl = (double)nToken  / (double)nRow;
+    if( rc==SQLITE_OK ) p->avgdl = (sqlite_double)nToken  / (sqlite_double)nRow;
 
     /* Calculate an IDF for each phrase in the query */
     for(i=0; rc==SQLITE_OK && i<nPhrase; i++){
@@ -452,8 +452,8 @@ static int fts5Bm25GetData(
         ** negative. Which is undesirable. So the mimimum allowable IDF is
         ** (1e-6) - roughly the same as a term that appears in just over
         ** half of set of 5,000,000 documents.  */
-        double idf = log( (nRow - nHit + 0.5) / (nHit + 0.5) );
-        if( idf<=0.0 ) idf = 1e-6;
+        sqlite_double idf = log( (nRow - nHit + LITDBL(0.5)) / (nHit + LITDBL(0.5)) );
+        if( idf<=LITDBL(0.0) ) idf = 1e-6;
         p->aIDF[i] = idf;
       }
     }
@@ -479,29 +479,29 @@ static void fts5Bm25Function(
   int nVal,                       /* Number of values in apVal[] array */
   sqlite3_value **apVal           /* Array of trailing arguments */
 ){
-  const double k1 = 1.2;          /* Constant "k1" from BM25 formula */
-  const double b = 0.75;          /* Constant "b" from BM25 formula */
+  const sqlite_double k1 = LITDBL(1.2);          /* Constant "k1" from BM25 formula */
+  const sqlite_double b = LITDBL(0.75);          /* Constant "b" from BM25 formula */
   int rc = SQLITE_OK;             /* Error code */
-  double score = 0.0;             /* SQL function return value */
+  sqlite_double score = LITDBL(0.0);             /* SQL function return value */
   Fts5Bm25Data *pData;            /* Values allocated/calculated once only */
   int i;                          /* Iterator variable */
   int nInst = 0;                  /* Value returned by xInstCount() */
-  double D = 0.0;                 /* Total number of tokens in row */
-  double *aFreq = 0;              /* Array of phrase freq. for current row */
+  sqlite_double D = LITDBL(0.0);                 /* Total number of tokens in row */
+  sqlite_double *aFreq = 0;              /* Array of phrase freq. for current row */
 
   /* Calculate the phrase frequency (symbol "f(qi,D)" in the documentation)
   ** for each phrase in the query for the current row. */
   rc = fts5Bm25GetData(pApi, pFts, &pData);
   if( rc==SQLITE_OK ){
     aFreq = pData->aFreq;
-    memset(aFreq, 0, sizeof(double) * pData->nPhrase);
+    memset(aFreq, 0, sizeof(sqlite_double) * pData->nPhrase);
     rc = pApi->xInstCount(pFts, &nInst);
   }
   for(i=0; rc==SQLITE_OK && i<nInst; i++){
     int ip; int ic; int io;
     rc = pApi->xInst(pFts, i, &ip, &ic, &io);
     if( rc==SQLITE_OK ){
-      double w = (nVal > ic) ? sqlite3_value_double(apVal[ic]) : 1.0;
+      sqlite_double w = (nVal > ic) ? sqlite3_value_double(apVal[ic]) : LITDBL(1.0);
       aFreq[ip] += w;
     }
   }
@@ -510,7 +510,7 @@ static void fts5Bm25Function(
   if( rc==SQLITE_OK ){
     int nTok;
     rc = pApi->xColumnSize(pFts, -1, &nTok);
-    D = (double)nTok;
+    D = (sqlite_double)nTok;
   }
 
   /* Determine the BM25 score for the current row. */
@@ -524,7 +524,7 @@ static void fts5Bm25Function(
   /* If no error has occurred, return the calculated score. Otherwise,
   ** throw an SQL exception.  */
   if( rc==SQLITE_OK ){
-    sqlite3_result_double(pCtx, -1.0 * score);
+    sqlite3_result_double(pCtx, LITDBL(-1.0) * score);
   }else{
     sqlite3_result_error_code(pCtx, rc);
   }

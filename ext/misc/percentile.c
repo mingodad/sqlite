@@ -72,14 +72,14 @@ typedef struct Percentile Percentile;
 struct Percentile {
   unsigned nAlloc;     /* Number of slots allocated for a[] */
   unsigned nUsed;      /* Number of slots actually used in a[] */
-  double rPct;         /* 1.0 more than the value for P */
-  double *a;           /* Array of Y values */
+  sqlite_double rPct;         /* 1.0 more than the value for P */
+  sqlite_double *a;           /* Array of Y values */
 };
 
 /*
 ** Return TRUE if the input floating-point number is an infinity.
 */
-static int isInfinity(double r){
+static int isInfinity(sqlite_double r){
   sqlite3_uint64 u;
   assert( sizeof(u)==sizeof(r) );
   memcpy(&u, &r, sizeof(u));
@@ -89,9 +89,9 @@ static int isInfinity(double r){
 /*
 ** Return TRUE if two doubles differ by 0.001 or less
 */
-static int sameValue(double a, double b){
+static int sameValue(sqlite_double a, sqlite_double b){
   a -= b;
-  return a>=-0.001 && a<=0.001;
+  return a>=LITDBL(-0.001) && a<=LITDBL(0.001);
 }
 
 /*
@@ -100,16 +100,16 @@ static int sameValue(double a, double b){
 */
 static void percentStep(sqlite3_context *pCtx, int argc, sqlite3_value **argv){
   Percentile *p;
-  double rPct;
+  sqlite_double rPct;
   int eType;
-  double y;
+  sqlite_double y;
   assert( argc==2 );
 
   /* Requirement 3:  P must be a number between 0 and 100 */
   eType = sqlite3_value_numeric_type(argv[1]);
   rPct = sqlite3_value_double(argv[1]);
   if( (eType!=SQLITE_INTEGER && eType!=SQLITE_FLOAT) ||
-      ((rPct = sqlite3_value_double(argv[1]))<0.0 || rPct>100.0) ){
+      ((rPct = sqlite3_value_double(argv[1]))<LITDBL(0.0) || rPct>LITDBL(100.0)) ){
     sqlite3_result_error(pCtx, "2nd argument to percentile() is not "
                          "a number between 0.0 and 100.0", -1);
     return;
@@ -121,9 +121,9 @@ static void percentStep(sqlite3_context *pCtx, int argc, sqlite3_value **argv){
 
   /* Remember the P value.  Throw an error if the P value is different
   ** from any prior row, per Requirement (2). */
-  if( p->rPct==0.0 ){
-    p->rPct = rPct+1.0;
-  }else if( !sameValue(p->rPct,rPct+1.0) ){
+  if( p->rPct==LITDBL(0.0) ){
+    p->rPct = rPct+LITDBL(1.0);
+  }else if( !sameValue(p->rPct,rPct+LITDBL(1.0)) ){
     sqlite3_result_error(pCtx, "2nd argument to percentile() is not the "
                                "same for all input rows", -1);
     return;
@@ -151,7 +151,7 @@ static void percentStep(sqlite3_context *pCtx, int argc, sqlite3_value **argv){
   /* Allocate and store the Y */
   if( p->nUsed>=p->nAlloc ){
     unsigned n = p->nAlloc*2 + 250;
-    double *a = sqlite3_realloc(p->a, sizeof(double)*n);
+    sqlite_double *a = sqlite3_realloc(p->a, sizeof(sqlite_double)*n);
     if( a==0 ){
       sqlite3_free(p->a);
       memset(p, 0, sizeof(*p));
@@ -168,8 +168,8 @@ static void percentStep(sqlite3_context *pCtx, int argc, sqlite3_value **argv){
 ** Compare to doubles for sorting using qsort()
 */
 static int doubleCmp(const void *pA, const void *pB){
-  double a = *(double*)pA;
-  double b = *(double*)pB;
+  sqlite_double a = *(sqlite_double*)pA;
+  sqlite_double b = *(sqlite_double*)pB;
   if( a==b ) return 0;
   if( a<b ) return -1;
   return +1;
@@ -182,16 +182,16 @@ static int doubleCmp(const void *pA, const void *pB){
 static void percentFinal(sqlite3_context *pCtx){
   Percentile *p;
   unsigned i1, i2;
-  double v1, v2;
-  double ix, vx;
+  sqlite_double v1, v2;
+  sqlite_double ix, vx;
   p = (Percentile*)sqlite3_aggregate_context(pCtx, 0);
   if( p==0 ) return;
   if( p->a==0 ) return;
   if( p->nUsed ){
-    qsort(p->a, p->nUsed, sizeof(double), doubleCmp);
-    ix = (p->rPct-1.0)*(p->nUsed-1)*0.01;
+    qsort(p->a, p->nUsed, sizeof(sqlite_double), doubleCmp);
+    ix = (p->rPct-LITDBL(1.0))*(p->nUsed-1)*LITDBL(0.01);
     i1 = (unsigned)ix;
-    i2 = ix==(double)i1 || i1==p->nUsed-1 ? i1 : i1+1;
+    i2 = ix==(sqlite_double)i1 || i1==p->nUsed-1 ? i1 : i1+1;
     v1 = p->a[i1];
     v2 = p->a[i2];
     vx = v1 + (v2-v1)*(ix-i1);

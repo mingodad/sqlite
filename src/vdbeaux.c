@@ -3284,7 +3284,7 @@ static u32 SQLITE_NOINLINE serialGet(
     ** endian.
     */
     static const u64 t1 = ((u64)0x3ff00000)<<32;
-    static const double r1 = 1.0;
+    static const sqlite_double r1 = LITDBL(1.0);
     u64 t2 = t1;
     swapMixedEndianFloat(t2);
     assert( sizeof(r1)==sizeof(t2) && memcmp(&r1, &t2, sizeof(r1))==0 );
@@ -3661,7 +3661,7 @@ static SQLITE_NOINLINE int sqlite3BlobCompare(const Mem *pB1, const Mem *pB2){
 ** number.  Return negative, zero, or positive if the first (i64) is less than,
 ** equal to, or greater than the second (double).
 */
-static int sqlite3IntFloatCompare(i64 i, double r){
+static int sqlite3IntFloatCompare(i64 i, sqlite_double r){
   if( sizeof(LONGDOUBLE_TYPE)>8 ){
     LONGDOUBLE_TYPE x = (LONGDOUBLE_TYPE)i;
     if( x<r ) return -1;
@@ -3669,16 +3669,16 @@ static int sqlite3IntFloatCompare(i64 i, double r){
     return 0;
   }else{
     i64 y;
-    double s;
-    if( r<-9223372036854775808.0 ) return +1;
-    if( r>9223372036854775807.0 ) return -1;
+    sqlite_double s;
+    if( r<LITDBL(-9223372036854775808.0) ) return +1;
+    if( r>LITDBL(9223372036854775807.0) ) return -1;
     y = (i64)r;
     if( i<y ) return -1;
     if( i>y ){
-      if( y==SMALLEST_INT64 && r>0.0 ) return -1;
+      if( y==SMALLEST_INT64 && r>LITDBL(0.0) ) return -1;
       return +1;
     }
-    s = (double)i;
+    s = (sqlite_double)i;
     if( s<r ) return -1;
     if( s>r ) return +1;
     return 0;

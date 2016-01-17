@@ -251,9 +251,9 @@ int sqlite3OsCurrentTimeInt64(sqlite3_vfs *pVfs, sqlite3_int64 *pTimeOut){
   if( pVfs->iVersion>=2 && pVfs->xCurrentTimeInt64 ){
     rc = pVfs->xCurrentTimeInt64(pVfs, pTimeOut);
   }else{
-    double r;
+    sqlite_double r;
     rc = pVfs->xCurrentTime(pVfs, &r);
-    *pTimeOut = (sqlite3_int64)(r*86400000.0);
+    *pTimeOut = (sqlite3_int64)(r*LITDBL(86400000.0));
   }
   return rc;
 }

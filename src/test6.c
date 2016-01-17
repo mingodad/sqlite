@@ -697,7 +697,7 @@ static int cfSleep(sqlite3_vfs *pCfVfs, int nMicro){
   sqlite3_vfs *pVfs = (sqlite3_vfs *)pCfVfs->pAppData;
   return pVfs->xSleep(pVfs, nMicro);
 }
-static int cfCurrentTime(sqlite3_vfs *pCfVfs, double *pTimeOut){
+static int cfCurrentTime(sqlite3_vfs *pCfVfs, sqlite_double *pTimeOut){
   sqlite3_vfs *pVfs = (sqlite3_vfs *)pCfVfs->pAppData;
   return pVfs->xCurrentTime(pVfs, pTimeOut);
 }

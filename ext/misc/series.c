@@ -337,7 +337,7 @@ static int seriesBestIndex(
   if( (idxNum & 3)==3 ){
     /* Both start= and stop= boundaries are available.  This is the 
     ** the preferred case */
-    pIdxInfo->estimatedCost = (double)1;
+    pIdxInfo->estimatedCost = (sqlite_double)1;
     pIdxInfo->estimatedRows = 1000;
     if( pIdxInfo->nOrderBy==1 ){
       if( pIdxInfo->aOrderBy[0].desc ) idxNum |= 8;
@@ -347,7 +347,7 @@ static int seriesBestIndex(
     /* If either boundary is missing, we have to generate a huge span
     ** of numbers.  Make this case very expensive so that the query
     ** planner will work hard to avoid it. */
-    pIdxInfo->estimatedCost = (double)2147483647;
+    pIdxInfo->estimatedCost = (sqlite_double)2147483647;
     pIdxInfo->estimatedRows = 2147483647;
   }
   pIdxInfo->idxNum = idxNum;

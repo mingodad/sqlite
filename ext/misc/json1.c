@@ -522,7 +522,7 @@ static void jsonReturn(
       int_as_real: /* fall through to real */;
     }
     case JSON_REAL: {
-      double r;
+      sqlite_double r;
 #ifdef SQLITE_AMALGAMATION
       const char *z = pNode->u.zJContent;
       sqlite3AtoF(z, &r, sqlite3Strlen30(z), SQLITE_UTF8);

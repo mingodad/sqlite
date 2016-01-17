@@ -713,7 +713,7 @@ static int multiplexRandomness(sqlite3_vfs *a, int b, char *c){
 static int multiplexSleep(sqlite3_vfs *a, int b){
   return gMultiplex.pOrigVfs->xSleep(gMultiplex.pOrigVfs, b);
 }
-static int multiplexCurrentTime(sqlite3_vfs *a, double *b){
+static int multiplexCurrentTime(sqlite3_vfs *a, sqlite_double *b){
   return gMultiplex.pOrigVfs->xCurrentTime(gMultiplex.pOrigVfs, b);
 }
 static int multiplexGetLastError(sqlite3_vfs *a, int b, char *c){

@@ -72,7 +72,7 @@ LIBOBJ+= vdbe.o parse.o \
          update.o userauth.o util.o vacuum.o \
          vdbeapi.o vdbeaux.o vdbeblob.o vdbemem.o vdbesort.o \
 	 vdbetrace.o wal.o walker.o where.o wherecode.o whereexpr.o \
-         utf.o vtab.o sql_prepared.o
+         utf.o vtab.o
 
 
 # All of the source code files.
@@ -145,7 +145,6 @@ SRC = \
   $(TOP)/src/select.c \
   $(TOP)/src/status.c \
   $(TOP)/src/shell.c \
-  $(TOP)/src/sql_prepared.c \
   $(TOP)/src/sqlite.h.in \
   $(TOP)/src/sqlite3ext.h \
   $(TOP)/src/sqliteInt.h \

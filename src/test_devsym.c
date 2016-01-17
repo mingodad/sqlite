@@ -70,7 +70,7 @@ static void devsymDlClose(sqlite3_vfs*, void*);
 #endif /* SQLITE_OMIT_LOAD_EXTENSION */
 static int devsymRandomness(sqlite3_vfs*, int nByte, char *zOut);
 static int devsymSleep(sqlite3_vfs*, int microseconds);
-static int devsymCurrentTime(sqlite3_vfs*, double*);
+static int devsymCurrentTime(sqlite3_vfs*, sqlite_double*);
 
 static sqlite3_vfs devsym_vfs = {
   2,                     /* iVersion */
@@ -367,7 +367,7 @@ static int devsymSleep(sqlite3_vfs *pVfs, int nMicro){
 /*
 ** Return the current time as a Julian Day number in *pTimeOut.
 */
-static int devsymCurrentTime(sqlite3_vfs *pVfs, double *pTimeOut){
+static int devsymCurrentTime(sqlite3_vfs *pVfs, sqlite_double *pTimeOut){
   return g.pVfs->xCurrentTime(g.pVfs, pTimeOut);
 }
 

@@ -458,7 +458,9 @@
 ** substitute integer for floating-point
 */
 #ifdef SQLITE_OMIT_FLOATING_POINT
-# define double sqlite_int64
+# define sqlite_double sqlite_int64
+# define TO_SQLITE_DOUBLE(x)  (x)
+# define LITDBL(n) n
 # define float sqlite_int64
 # define LONGDOUBLE_TYPE sqlite_int64
 # ifndef SQLITE_BIG_DBL
@@ -468,9 +470,25 @@
 # define SQLITE_OMIT_TRACE 1
 # undef SQLITE_MIXED_ENDIAN_64BIT_FLOAT
 # undef SQLITE_HAVE_ISNAN
+#else
+# ifdef SQLITE_USE_DECIMAL
+# define sqlite_double  _Decimal64
+# define TO_SQLITE_DOUBLE(x)  __bid_extenddfdd(x)
+# define LITDBL(n) n##dd
+#  define LONGDOUBLE_TYPE _Decimal128
+# else
+#  define sqlite_double  double
+# define TO_SQLITE_DOUBLE(x)  (x)
+#  define LITDBL(n) n
+#  define LONGDOUBLE_TYPE long double
+# endif
 #endif
 #ifndef SQLITE_BIG_DBL
-# define SQLITE_BIG_DBL (1e99)
+# define SQLITE_BIG_DBL (LITDBL(1e99))
+#endif
+
+#ifndef DOUBLE_SIGNIFICANT_DIGITS
+# define DOUBLE_SIGNIFICANT_DIGITS 16
 #endif
 
 /*
@@ -1208,7 +1226,7 @@ struct sqlite3 {
   sqlite3_value *pErr;          /* Most recent error message */
   union {
     volatile int isInterrupted; /* True if sqlite3_interrupt has been called */
-    double notUsed1;            /* Spacer */
+    sqlite_double notUsed1;            /* Spacer */
   } u1;
   Lookaside lookaside;          /* Lookaside malloc configuration */
 #ifndef SQLITE_OMIT_AUTHORIZATION
@@ -3268,7 +3286,7 @@ sqlite3_mutex *sqlite3Pcache1Mutex(void);
 sqlite3_mutex *sqlite3MallocMutex(void);
 
 #ifndef SQLITE_OMIT_FLOATING_POINT
-  int sqlite3IsNaN(double);
+  int sqlite3IsNaN(sqlite_double);
 #else
 # define sqlite3IsNaN(X)  0
 #endif
@@ -3610,7 +3628,7 @@ int sqlite3FixSelect(DbFixer*, Select*);
 int sqlite3FixExpr(DbFixer*, Expr*);
 int sqlite3FixExprList(DbFixer*, ExprList*);
 int sqlite3FixTriggerStep(DbFixer*, TriggerStep*);
-int sqlite3AtoF(const char *z, double*, int, u8);
+int sqlite3AtoF(const char *z, sqlite_double*, int, u8);
 int sqlite3GetInt32(const char *, int*);
 int sqlite3Atoi(const char*);
 int sqlite3Utf16ByteLen(const void *pData, int nChar);
@@ -4036,24 +4054,5 @@ int sqlite3ThreadJoin(SQLiteThread*, void**);
 #if defined(SQLITE_ENABLE_DBSTAT_VTAB) || defined(SQLITE_TEST)
 int sqlite3DbstatRegister(sqlite3*);
 #endif
-
-#ifndef SQLITE_OMIT_SQL_PREPARED
-typedef struct SqlPreparedStep SqlPreparedStep;
-void sqlite3SqlPreparedBeginParse(Parse *pParse,
-  Token *pName, int ifNotExists );
-void sqlite3SqlPreparedFinishParse(Parse *pParse, Token *pEnd, SqlPreparedStep *pStepList);
-void sqlite3SqlPreparedArgInit(Parse *pParse);
-void sqlite3SqlPreparedArgExtend(Parse *pParse, Token *p);
-void sqlite3SqlPreparedExecute(Parse *pParse, Token *pName);
-void sqlite3SqlPreparedDeallocate(Parse *pParse, Token *pName, int ifExists);
-void sqlite3SqlPreparedDeletePreparedStep(sqlite3 *db, SqlPreparedStep *pSqlPreparedStep);
-SqlPreparedStep *sqlite3SqlPreparedUpdateStep(
-  sqlite3 *db,  Token *pTableName, ExprList *pEList, Expr *pWhere,  u8 orconf);
-SqlPreparedStep *sqlite3SqlPreparedInsertStep(
-  sqlite3 *db, Token *pTableName, IdList *pColumn, Select *pSelect, u8 orconf);
-SqlPreparedStep *sqlite3SqlPreparedDeleteStep(
-  sqlite3 *db, Token *pTableName, Expr *pWhere);
-SqlPreparedStep *sqlite3SqlPreparedSelectStep(sqlite3 *db, Select *pSelect);
-#endif /*SQLITE_OMIT_SQL_PREPARED*/
 
 #endif /* _SQLITEINT_H_ */

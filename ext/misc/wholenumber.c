@@ -219,11 +219,11 @@ static int wholenumberBestIndex(
     pIdxInfo->orderByConsumed = 1;
   }
   if( (idxNum & 12)==0 ){
-    pIdxInfo->estimatedCost = (double)100000000;
+    pIdxInfo->estimatedCost = (sqlite_double)100000000;
   }else if( (idxNum & 3)==0 ){
-    pIdxInfo->estimatedCost = (double)5;
+    pIdxInfo->estimatedCost = (sqlite_double)5;
   }else{
-    pIdxInfo->estimatedCost = (double)1;
+    pIdxInfo->estimatedCost = (sqlite_double)1;
   }
   return SQLITE_OK;
 }

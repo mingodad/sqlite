@@ -1293,7 +1293,7 @@ static int asyncSleep(sqlite3_vfs *pAsyncVfs, int nMicro){
   sqlite3_vfs *pVfs = (sqlite3_vfs *)pAsyncVfs->pAppData;
   return pVfs->xSleep(pVfs, nMicro);
 }
-static int asyncCurrentTime(sqlite3_vfs *pAsyncVfs, double *pTimeOut){
+static int asyncCurrentTime(sqlite3_vfs *pAsyncVfs, sqlite_double *pTimeOut){
   sqlite3_vfs *pVfs = (sqlite3_vfs *)pAsyncVfs->pAppData;
   return pVfs->xCurrentTime(pVfs, pTimeOut);
 }

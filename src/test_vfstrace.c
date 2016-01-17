@@ -168,7 +168,7 @@ static void (*vfstraceDlSym(sqlite3_vfs*,void*, const char *zSymbol))(void);
 static void vfstraceDlClose(sqlite3_vfs*, void*);
 static int vfstraceRandomness(sqlite3_vfs*, int nByte, char *zOut);
 static int vfstraceSleep(sqlite3_vfs*, int microseconds);
-static int vfstraceCurrentTime(sqlite3_vfs*, double*);
+static int vfstraceCurrentTime(sqlite3_vfs*, sqlite_double *);
 static int vfstraceGetLastError(sqlite3_vfs*, int, char*);
 static int vfstraceCurrentTimeInt64(sqlite3_vfs*, sqlite3_int64*);
 static int vfstraceSetSystemCall(sqlite3_vfs*,const char*, sqlite3_syscall_ptr);
@@ -775,7 +775,7 @@ static int vfstraceSleep(sqlite3_vfs *pVfs, int nMicro){
 /*
 ** Return the current time as a Julian Day number in *pTimeOut.
 */
-static int vfstraceCurrentTime(sqlite3_vfs *pVfs, double *pTimeOut){
+static int vfstraceCurrentTime(sqlite3_vfs *pVfs, sqlite_double  *pTimeOut){
   vfstrace_info *pInfo = (vfstrace_info*)pVfs->pAppData;
   sqlite3_vfs *pRoot = pInfo->pRootVfs;
   return pRoot->xCurrentTime(pRoot, pTimeOut);

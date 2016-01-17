@@ -545,12 +545,12 @@ static void notValid(
 ** value between 1.0 and 0.0.
 */
 static int exprProbability(Expr *p){
-  double r = -1.0;
+  sqlite_double r = LITDBL(-1.0);
   if( p->op!=TK_FLOAT ) return -1;
   sqlite3AtoF(p->u.zToken, &r, sqlite3Strlen30(p->u.zToken), SQLITE_UTF8);
-  assert( r>=0.0 );
-  if( r>1.0 ) return -1;
-  return (int)(r*134217728.0);
+  assert( r>=LITDBL(0.0) );
+  if( r>LITDBL(1.0) ) return -1;
+  return (int)(r*LITDBL(134217728.0));
 }
 
 /*

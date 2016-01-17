@@ -572,7 +572,7 @@ static void xF5tFunction(
       Tcl_GetIntFromObj(0, pVar, &n);
       sqlite3_result_int(pCtx, n);
     }else if( c=='d' && strcmp(zType,"double")==0 ){
-      double r;
+      sqlite_double r;
       Tcl_GetDoubleFromObj(0, pVar, &r);
       sqlite3_result_double(pCtx, r);
     }else if( (c=='w' && strcmp(zType,"wideInt")==0) ||

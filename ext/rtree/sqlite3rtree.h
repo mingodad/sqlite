@@ -29,7 +29,7 @@ typedef struct sqlite3_rtree_query_info sqlite3_rtree_query_info;
 #ifdef SQLITE_RTREE_INT_ONLY
   typedef sqlite3_int64 sqlite3_rtree_dbl;
 #else
-  typedef double sqlite3_rtree_dbl;
+  typedef sqlite_double sqlite3_rtree_dbl;
 #endif
 
 /*

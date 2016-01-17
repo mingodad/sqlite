@@ -2861,7 +2861,7 @@ static int whereLoopAddVirtual(
     pIdxInfo->idxNum = 0;
     pIdxInfo->needToFreeIdxStr = 0;
     pIdxInfo->orderByConsumed = 0;
-    pIdxInfo->estimatedCost = SQLITE_BIG_DBL / (double)2;
+    pIdxInfo->estimatedCost = SQLITE_BIG_DBL / (sqlite_double)2;
     pIdxInfo->estimatedRows = 25;
     pIdxInfo->idxFlags = 0;
     pIdxInfo->colUsed = (sqlite3_int64)pSrc->colUsed;

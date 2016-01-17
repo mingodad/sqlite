@@ -35,7 +35,7 @@ TCC = $(CC) $(CFLAGS) -I. -I${TOP}/src -I${TOP}/ext/rtree -I${TOP}/ext/fts3
 # Define this for the autoconf-based build, so that the code knows it can
 # include the generated config.h
 # 
-TCC += -D_HAVE_SQLITE_CONFIG_H -DBUILD_sqlite
+TCC += -D_HAVE_SQLITE_CONFIG_H -DBUILD_sqlite -DSQLITE_USE_DECIMALX=1
 
 # Define -DNDEBUG to compile without debugging (i.e., for production usage)
 # Omitting the define will cause extra debugging code to be inserted and
@@ -184,7 +184,7 @@ LIBOBJS0 = alter.lo analyze.lo attach.lo auth.lo \
          update.lo util.lo vacuum.lo \
          vdbe.lo vdbeapi.lo vdbeaux.lo vdbeblob.lo vdbemem.lo vdbesort.lo \
          vdbetrace.lo wal.lo walker.lo where.lo wherecode.lo whereexpr.lo \
-         utf.lo vtab.lo sql_prepared.lo
+         utf.lo vtab.lo
 
 # Object files for the amalgamation.
 #
@@ -265,7 +265,6 @@ SRC = \
   $(TOP)/src/select.c \
   $(TOP)/src/status.c \
   $(TOP)/src/shell.c \
-  $(TOP)/src/sql_prepared.c \
   $(TOP)/src/sqlite.h.in \
   $(TOP)/src/sqlite3ext.h \
   $(TOP)/src/sqliteInt.h \
@@ -872,9 +871,6 @@ vdbetrace.lo:	$(TOP)/src/vdbetrace.c $(HDR)
 
 vtab.lo:	$(TOP)/src/vtab.c $(HDR)
 	$(LTCOMPILE) $(TEMP_STORE) -c $(TOP)/src/vtab.c
-
-sql_prepared.lo:	$(TOP)/src/sql_prepared.c $(HDR)
-	$(LTCOMPILE) $(TEMP_STORE) -c $(TOP)/src/sql_prepared.c
 
 wal.lo:	$(TOP)/src/wal.c $(HDR)
 	$(LTCOMPILE) $(TEMP_STORE) -c $(TOP)/src/wal.c

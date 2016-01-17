@@ -172,7 +172,7 @@ static void (*vfslogDlSym(sqlite3_vfs *pVfs, void *p, const char*zSym))(void);
 static void vfslogDlClose(sqlite3_vfs*, void*);
 static int vfslogRandomness(sqlite3_vfs*, int nByte, char *zOut);
 static int vfslogSleep(sqlite3_vfs*, int microseconds);
-static int vfslogCurrentTime(sqlite3_vfs*, double*);
+static int vfslogCurrentTime(sqlite3_vfs*, sqlite_double*);
 
 static int vfslogGetLastError(sqlite3_vfs*, int, char *);
 static int vfslogCurrentTimeInt64(sqlite3_vfs*, sqlite3_int64*);
@@ -603,7 +603,7 @@ static int vfslogSleep(sqlite3_vfs *pVfs, int nMicro){
 /*
 ** Return the current time as a Julian Day number in *pTimeOut.
 */
-static int vfslogCurrentTime(sqlite3_vfs *pVfs, double *pTimeOut){
+static int vfslogCurrentTime(sqlite3_vfs *pVfs, sqlite_double *pTimeOut){
   return REALVFS(pVfs)->xCurrentTime(REALVFS(pVfs), pTimeOut);
 }
 

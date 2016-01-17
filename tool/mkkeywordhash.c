@@ -143,11 +143,6 @@ struct Keyword {
 #else
 #  define CTE        0x00040000
 #endif
-#ifdef SQLITE_OMIT_SQL_PREPARED
-#  define PREPARED       0
-#else
-#  define SQL_PREPARED       0x00080000
-#endif
 
 /*
 ** These are the keywords
@@ -184,7 +179,6 @@ static Keyword aKeywordTable[] = {
   { "CURRENT_TIME",     "TK_CTIME_KW",     ALWAYS                 },
   { "CURRENT_TIMESTAMP","TK_CTIME_KW",     ALWAYS                 },
   { "DATABASE",         "TK_DATABASE",     ATTACH                 },
-  { "DEALLOCATE",          "TK_DEALLOCATE",      SQL_PREPARED                 },
   { "DEFAULT",          "TK_DEFAULT",      ALWAYS                 },
   { "DEFERRED",         "TK_DEFERRED",     ALWAYS                 },
   { "DEFERRABLE",       "TK_DEFERRABLE",   FKEY                   },
@@ -199,7 +193,6 @@ static Keyword aKeywordTable[] = {
   { "ESCAPE",           "TK_ESCAPE",       ALWAYS                 },
   { "EXCEPT",           "TK_EXCEPT",       COMPOUND               },
   { "EXCLUSIVE",        "TK_EXCLUSIVE",    ALWAYS                 },
-  { "EXECUTE",        "TK_EXECUTE",    SQL_PREPARED                 },
   { "EXISTS",           "TK_EXISTS",       ALWAYS                 },
   { "EXPLAIN",          "TK_EXPLAIN",      EXPLAIN                },
   { "FAIL",             "TK_FAIL",         CONFLICT|TRIGGER       },
@@ -243,7 +236,6 @@ static Keyword aKeywordTable[] = {
   { "OUTER",            "TK_JOIN_KW",      ALWAYS                 },
   { "PLAN",             "TK_PLAN",         EXPLAIN                },
   { "PRAGMA",           "TK_PRAGMA",       PRAGMA                 },
-  { "PREPARE",           "TK_PREPARE",       SQL_PREPARED                 },
   { "PRIMARY",          "TK_PRIMARY",      ALWAYS                 },
   { "QUERY",            "TK_QUERY",        EXPLAIN                },
   { "RAISE",            "TK_RAISE",        TRIGGER                },

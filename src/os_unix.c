@@ -6193,12 +6193,12 @@ static int unixCurrentTimeInt64(sqlite3_vfs *NotUsed, sqlite3_int64 *piNow){
 ** current time and date as a Julian Day number into *prNow and
 ** return 0.  Return 1 if the time and date cannot be found.
 */
-static int unixCurrentTime(sqlite3_vfs *NotUsed, double *prNow){
+static int unixCurrentTime(sqlite3_vfs *NotUsed, sqlite_double *prNow){
   sqlite3_int64 i = 0;
   int rc;
   UNUSED_PARAMETER(NotUsed);
   rc = unixCurrentTimeInt64(0, &i);
-  *prNow = i/86400000.0;
+  *prNow = i/LITDBL(86400000.0);
   return rc;
 }
 #else

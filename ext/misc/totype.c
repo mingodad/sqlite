@@ -201,7 +201,7 @@ static int totypeAtoi64(const char *zNum, sqlite3_int64 *pNum, int length){
 ** returns FALSE but it still converts the prefix and writes the result
 ** into *pResult.
 */
-static int totypeAtoF(const char *z, double *pResult, int length){
+static int totypeAtoF(const char *z, sqlite_double *pResult, int length){
   const char *zEnd = z + length;
   /* sign * significand * (10 ^ (esign * exponent)) */
   int sign = 1;    /* sign of significand */
@@ -210,11 +210,11 @@ static int totypeAtoF(const char *z, double *pResult, int length){
   int esign = 1;   /* sign of exponent */
   int e = 0;       /* exponent */
   int eValid = 1;  /* True exponent is either not used or is well-formed */
-  double result;
+  sqlite_double result;
   int nDigits = 0;
   int nonNum = 0;
 
-  *pResult = 0.0;   /* Default return value, in case of an error */
+  *pResult = LITDBL(0.0);   /* Default return value, in case of an error */
 
   /* skip leading spaces */
   while( z<zEnd && totypeIsspace(*z) ) z++;
@@ -295,7 +295,7 @@ totype_atof_calc:
   if( !s ) {
     /* In the IEEE 754 standard, zero is signed.
     ** Add the sign if we've seen at least one digit */
-    result = (sign<0 && nDigits) ? -(double)0 : (double)0;
+    result = (sign<0 && nDigits) ? -(sqlite_double)0 : (sqlite_double)0;
   } else {
     /* attempt to reduce exponent */
     if( esign>0 ){
@@ -310,28 +310,28 @@ totype_atof_calc:
     /* if exponent, scale significand as appropriate
     ** and store in result. */
     if( e ){
-      double scale = 1.0;
+      sqlite_double scale = LITDBL(1.0);
       /* attempt to handle extremely small/large numbers better */
       if( e>307 && e<342 ){
-        while( e%308 ) { scale *= 1.0e+1; e -= 1; }
+        while( e%308 ) { scale *= LITDBL(1.0e+1); e -= 1; }
         if( esign<0 ){
           result = s / scale;
-          result /= 1.0e+308;
+          result /= LITDBL(1.0e+308);
         }else{
           result = s * scale;
-          result *= 1.0e+308;
+          result *= LITDBL(1.0e+308);
         }
       }else if( e>=342 ){
         if( esign<0 ){
-          result = 0.0*s;
+          result = LITDBL(0.0)*s;
         }else{
-          result = 1e308*1e308*s;  /* Infinity */
+          result = LITDBL(1e308)*LITDBL(1e308)*s;  /* Infinity */
         }
       }else{
         /* 1.0e+22 is the largest power of 10 than can be
         ** represented exactly. */
-        while( e%22 ) { scale *= 1.0e+1; e -= 1; }
-        while( e>0 ) { scale *= 1.0e+22; e -= 22; }
+        while( e%22 ) { scale *= LITDBL(1.0e+1); e -= 1; }
+        while( e>0 ) { scale *= LITDBL(1.0e+22); e -= 22; }
         if( esign<0 ){
           result = s / scale;
         }else{
@@ -339,7 +339,7 @@ totype_atof_calc:
         }
       }
     } else {
-      result = (double)s;
+      result = (sqlite_double)s;
     }
   }
 
@@ -351,7 +351,7 @@ totype_atof_calc:
 }
 
 /*
-** tointeger(X):  If X is any value (integer, double, blob, or string) that
+** tointeger(X):  If X is any value (integer, sqlite_double, blob, or string) that
 ** can be losslessly converted into an integer, then make the conversion and
 ** return the result.  Otherwise, return NULL.
 */
@@ -364,9 +364,9 @@ static void tointegerFunc(
   (void)argc;
   switch( sqlite3_value_type(argv[0]) ){
     case SQLITE_FLOAT: {
-      double rVal = sqlite3_value_double(argv[0]);
+      sqlite_double rVal = sqlite3_value_double(argv[0]);
       sqlite3_int64 iVal = (sqlite3_int64)rVal;
-      if( rVal==(double)iVal ){
+      if( rVal==(sqlite_double)iVal ){
         sqlite3_result_int64(context, iVal);
       }
       break;
@@ -439,7 +439,7 @@ static void torealFunc(
     }
     case SQLITE_INTEGER: {
       sqlite3_int64 iVal = sqlite3_value_int64(argv[0]);
-      double rVal = (double)iVal;
+      sqlite_double rVal = (sqlite_double)iVal;
       if( iVal==(sqlite3_int64)rVal ){
         sqlite3_result_double(context, rVal);
       }
@@ -449,17 +449,17 @@ static void torealFunc(
       const unsigned char *zBlob = sqlite3_value_blob(argv[0]);
       if( zBlob ){
         int nBlob = sqlite3_value_bytes(argv[0]);
-        if( nBlob==sizeof(double) ){
-          double rVal;
+        if( nBlob==sizeof(sqlite_double) ){
+          sqlite_double rVal;
           if( TOTYPE_LITTLEENDIAN ){
             int i;
-            unsigned char zBlobRev[sizeof(double)];
-            for(i=0; i<sizeof(double); i++){
-              zBlobRev[i] = zBlob[sizeof(double)-1-i];
+            unsigned char zBlobRev[sizeof(sqlite_double)];
+            for(i=0; i<sizeof(sqlite_double); i++){
+              zBlobRev[i] = zBlob[sizeof(sqlite_double)-1-i];
             }
-            memcpy(&rVal, zBlobRev, sizeof(double));
+            memcpy(&rVal, zBlobRev, sizeof(sqlite_double));
           }else{
-            memcpy(&rVal, zBlob, sizeof(double));
+            memcpy(&rVal, zBlob, sizeof(sqlite_double));
           }
           sqlite3_result_double(context, rVal);
         }
@@ -471,7 +471,7 @@ static void torealFunc(
       if( zStr ){
         int nStr = sqlite3_value_bytes(argv[0]);
         if( nStr && !totypeIsspace(zStr[0]) && !totypeIsspace(zStr[nStr-1]) ){
-          double rVal;
+          sqlite_double rVal;
           if( totypeAtoF((const char*)zStr, &rVal, nStr) ){
             sqlite3_result_double(context, rVal);
             return;

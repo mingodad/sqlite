@@ -1554,7 +1554,7 @@ wqlist(A) ::= wqlist(W) COMMA nm(X) eidlist_opt(Y) AS LP select(Z) RP. {
 %endif  SQLITE_OMIT_CTE
 
 ///////////////////// The SQL PREPARE statement /////////////////////////////
-%ifndef SQLITE_OMIT_SQL_PREPARED
+%ifdef SQLITE_USE_SQL_PREPARED
 cmd ::= create_prepared.  {sqlite3SqlPreparedFinishParse(pParse,0, 0);}
 cmd ::= create_prepared LP prepared_arglist RP(X) AS prepared_cmd(S) .  {
   sqlite3SqlPreparedFinishParse(pParse, &X, S);
@@ -1603,5 +1603,5 @@ prepared_anylist ::= .
 prepared_anylist ::= prepared_anylist LP prepared_anylist RP.
 prepared_anylist ::= prepared_anylist ANY.
 
-%endif  SQLITE_OMIT_SQL_PREPARED
+%endif  SQLITE_USE_SQL_PREPARED
 

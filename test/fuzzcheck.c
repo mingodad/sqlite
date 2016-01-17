@@ -396,9 +396,9 @@ static sqlite3_int64 timeOfDay(void){
   if( clockVfs->iVersion>=1 && clockVfs->xCurrentTimeInt64!=0 ){
     clockVfs->xCurrentTimeInt64(clockVfs, &t);
   }else{
-    double r;
+    sqlite_double r;
     clockVfs->xCurrentTime(clockVfs, &r);
-    t = (sqlite3_int64)(r*86400000.0);
+    t = (sqlite3_int64)(r*LITDBL(86400000.0));
   }
   return t;
 }

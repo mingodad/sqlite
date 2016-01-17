@@ -380,7 +380,7 @@ static char **columnNames(
 static void printQuoted(FILE *out, sqlite3_value *X){
   switch( sqlite3_value_type(X) ){
     case SQLITE_FLOAT: {
-      double r1;
+      sqlite_double r1;
       char zBuf[50];
       r1 = sqlite3_value_double(X);
       sqlite3_snprintf(sizeof(zBuf), zBuf, "%!.15g", r1);
@@ -1514,7 +1514,7 @@ static void putsVarint(FILE *out, sqlite3_uint64 v){
 static void putValue(FILE *out, sqlite3_value *pVal){
   int iDType = sqlite3_value_type(pVal);
   sqlite3_int64 iX;
-  double rX;
+  sqlite_double rX;
   sqlite3_uint64 uX;
   int j;
 

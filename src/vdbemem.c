@@ -415,13 +415,13 @@ void sqlite3VdbeMemRelease(Mem *p){
 }
 
 /*
-** Convert a 64-bit IEEE double into a 64-bit signed integer.
+** Convert a 64-bit IEEE sqlite_double into a 64-bit signed integer.
 ** If the double is out of range of a 64-bit signed integer then
 ** return the closest available 64-bit signed integer.
 */
-static i64 doubleToInt64(double r){
+static i64 doubleToInt64(sqlite_double r){
 #ifdef SQLITE_OMIT_FLOATING_POINT
-  /* When floating-point is omitted, double and int64 are the same thing */
+  /* When floating-point is omitted, sqlite_double and int64 are the same thing */
   return r;
 #else
   /*
@@ -434,9 +434,9 @@ static i64 doubleToInt64(double r){
   static const i64 maxInt = LARGEST_INT64;
   static const i64 minInt = SMALLEST_INT64;
 
-  if( r<=(double)minInt ){
+  if( r<=(sqlite_double)minInt ){
     return minInt;
-  }else if( r>=(double)maxInt ){
+  }else if( r>=(sqlite_double)maxInt ){
     return maxInt;
   }else{
     return (i64)r;
@@ -476,25 +476,25 @@ i64 sqlite3VdbeIntValue(Mem *pMem){
 
 /*
 ** Return the best representation of pMem that we can get into a
-** double.  If pMem is already a double or an integer, return its
-** value.  If it is a string or blob, try to convert it to a double.
+** sqlite_double.  If pMem is already a sqlite_double or an integer, return its
+** value.  If it is a string or blob, try to convert it to a sqlite_double.
 ** If it is a NULL, return 0.0.
 */
-double sqlite3VdbeRealValue(Mem *pMem){
+sqlite_double sqlite3VdbeRealValue(Mem *pMem){
   assert( pMem->db==0 || sqlite3_mutex_held(pMem->db->mutex) );
   assert( EIGHT_BYTE_ALIGNMENT(pMem) );
   if( pMem->flags & MEM_Real ){
     return pMem->u.r;
   }else if( pMem->flags & MEM_Int ){
-    return (double)pMem->u.i;
+    return (sqlite_double)pMem->u.i;
   }else if( pMem->flags & (MEM_Str|MEM_Blob) ){
-    /* (double)0 In case of SQLITE_OMIT_FLOATING_POINT... */
-    double val = (double)0;
+    /* (sqlite_double)0 In case of SQLITE_OMIT_FLOATING_POINT... */
+    sqlite_double val = (sqlite_double)0;
     sqlite3AtoF(pMem->z, &val, pMem->n, pMem->enc);
     return val;
   }else{
-    /* (double)0 In case of SQLITE_OMIT_FLOATING_POINT... */
-    return (double)0;
+    /* (sqlite_double)0 In case of SQLITE_OMIT_FLOATING_POINT... */
+    return (sqlite_double)0;
   }
 }
 
@@ -701,7 +701,7 @@ void sqlite3VdbeMemSetInt64(Mem *pMem, i64 val){
 ** Delete any previous value and set the value stored in *pMem to val,
 ** manifest type REAL.
 */
-void sqlite3VdbeMemSetDouble(Mem *pMem, double val){
+void sqlite3VdbeMemSetDouble(Mem *pMem, sqlite_double val){
   sqlite3VdbeMemSetNull(pMem);
   if( !sqlite3IsNaN(val) ){
     pMem->u.r = val;
@@ -1345,7 +1345,7 @@ static int valueFromExpr(
       if( pVal->flags & MEM_Real ){
         pVal->u.r = -pVal->u.r;
       }else if( pVal->u.i==SMALLEST_INT64 ){
-        pVal->u.r = -(double)SMALLEST_INT64;
+        pVal->u.r = -(sqlite_double)SMALLEST_INT64;
         MemSetTypeFlag(pVal, MEM_Real);
       }else{
         pVal->u.i = -pVal->u.i;

@@ -810,7 +810,7 @@ static int echoBestIndex(sqlite3_vtab *tab, sqlite3_index_info *pIdxInfo){
   int useIdx = 0;
   int rc = SQLITE_OK;
   int useCost = 0;
-  double cost = 0;
+  sqlite_double cost = 0;
   int isIgnoreUsable = 0;
   if( Tcl_GetVar(interp, "echo_module_ignore_usable", TCL_GLOBAL_ONLY) ){
     isIgnoreUsable = 1;
@@ -937,11 +937,11 @@ static int echoBestIndex(sqlite3_vtab *tab, sqlite3_index_info *pIdxInfo){
     /* Approximation of log2(nRow). */
     for( ii=0; ii<(sizeof(int)*8)-1; ii++ ){
       if( nRow & (1<<ii) ){
-        pIdxInfo->estimatedCost = (double)ii;
+        pIdxInfo->estimatedCost = (sqlite_double)ii;
       }
     }
   }else{
-    pIdxInfo->estimatedCost = (double)nRow;
+    pIdxInfo->estimatedCost = (sqlite_double)nRow;
   }
   return rc;
 }

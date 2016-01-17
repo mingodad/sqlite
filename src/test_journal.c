@@ -158,7 +158,7 @@ static void (*jtDlSym(sqlite3_vfs*,void*, const char *zSymbol))(void);
 static void jtDlClose(sqlite3_vfs*, void*);
 static int jtRandomness(sqlite3_vfs*, int nByte, char *zOut);
 static int jtSleep(sqlite3_vfs*, int microseconds);
-static int jtCurrentTime(sqlite3_vfs*, double*);
+static int jtCurrentTime(sqlite3_vfs*, sqlite_double*);
 static int jtCurrentTimeInt64(sqlite3_vfs*, sqlite3_int64*);
 
 static sqlite3_vfs jt_vfs = {
@@ -814,7 +814,7 @@ static int jtSleep(sqlite3_vfs *pVfs, int nMicro){
 /*
 ** Return the current time as a Julian Day number in *pTimeOut.
 */
-static int jtCurrentTime(sqlite3_vfs *pVfs, double *pTimeOut){
+static int jtCurrentTime(sqlite3_vfs *pVfs, sqlite_double *pTimeOut){
   return g.pVfs->xCurrentTime(g.pVfs, pTimeOut);
 }
 /*

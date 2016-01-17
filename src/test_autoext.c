@@ -25,7 +25,7 @@ static void sqrFunc(
   int argc,
   sqlite3_value **argv
 ){
-  double r = sqlite3_value_double(argv[0]);
+  sqlite_double r = sqlite3_value_double(argv[0]);
   sqlite3_result_double(context, r*r);
 }
 
@@ -50,7 +50,7 @@ static void cubeFunc(
   int argc,
   sqlite3_value **argv
 ){
-  double r = sqlite3_value_double(argv[0]);
+  sqlite_double r = sqlite3_value_double(argv[0]);
   sqlite3_result_double(context, r*r*r);
 }
 

@@ -106,7 +106,7 @@ static const et_info fmtinfo[] = {
 */
 #ifndef SQLITE_OMIT_FLOATING_POINT
 /*
-** "*val" is a double such that 0.1 <= *val < 10.0
+** "*val" is a sqlite_double such that 0.1 <= *val < 10.0
 ** Return the ascii code for the leading digit of *val, then
 ** multiply "*val" by 10.0 to renormalize.
 **
@@ -126,7 +126,7 @@ static char et_getdigit(LONGDOUBLE_TYPE *val, int *cnt){
   digit = (int)*val;
   d = digit;
   digit += '0';
-  *val = (*val - d)*10.0;
+  *val = (*val - d)*LITDBL(10.0);
   return (char)digit;
 }
 #endif /* SQLITE_OMIT_FLOATING_POINT */
@@ -203,7 +203,7 @@ void sqlite3VXPrintf(
 #ifndef SQLITE_OMIT_FLOATING_POINT
   int  exp, e2;              /* exponent of real numbers */
   int nsd;                   /* Number of significant digits returned */
-  double rounder;            /* Used for rounding floating point values */
+  sqlite_double rounder;            /* Used for rounding floating point values */
   etByte flag_dp;            /* True if decimal point should be shown */
   etByte flag_rtz;           /* True if trailing zeros should be removed */
 #endif
@@ -454,13 +454,13 @@ void sqlite3VXPrintf(
         if( bArgList ){
           realvalue = getDoubleArg(pArgList);
         }else{
-          realvalue = va_arg(ap,double);
+          realvalue = va_arg(ap,sqlite_double);
         }
 #ifdef SQLITE_OMIT_FLOATING_POINT
         length = 0;
 #else
         if( precision<0 ) precision = 6;         /* Set default precision */
-        if( realvalue<0.0 ){
+        if( realvalue<LITDBL(0.0) ){
           realvalue = -realvalue;
           prefix = '-';
         }else{
@@ -470,23 +470,23 @@ void sqlite3VXPrintf(
         }
         if( xtype==etGENERIC && precision>0 ) precision--;
         testcase( precision>0xfff );
-        for(idx=precision&0xfff, rounder=0.5; idx>0; idx--, rounder*=0.1){}
+        for(idx=precision&0xfff, rounder=LITDBL(0.5); idx>0; idx--, rounder*=LITDBL(0.1)){}
         if( xtype==etFLOAT ) realvalue += rounder;
         /* Normalize realvalue to within 10.0 > realvalue >= 1.0 */
         exp = 0;
-        if( sqlite3IsNaN((double)realvalue) ){
+        if( sqlite3IsNaN((sqlite_double)realvalue) ){
           bufpt = "NaN";
           length = 3;
           break;
         }
-        if( realvalue>0.0 ){
-          LONGDOUBLE_TYPE scale = 1.0;
-          while( realvalue>=1e100*scale && exp<=350 ){ scale *= 1e100;exp+=100;}
-          while( realvalue>=1e10*scale && exp<=350 ){ scale *= 1e10; exp+=10; }
-          while( realvalue>=10.0*scale && exp<=350 ){ scale *= 10.0; exp++; }
+        if( realvalue>LITDBL(0.0) ){
+          LONGDOUBLE_TYPE scale = LITDBL(1.0);
+          while( realvalue>=LITDBL(1e100)*scale && exp<=350 ){ scale *= LITDBL(1e100);exp+=100;}
+          while( realvalue>=LITDBL(1e10)*scale && exp<=350 ){ scale *= LITDBL(1e10); exp+=10; }
+          while( realvalue>=LITDBL(10.0)*scale && exp<=350 ){ scale *= LITDBL(10.0); exp++; }
           realvalue /= scale;
-          while( realvalue<1e-8 ){ realvalue *= 1e8; exp-=8; }
-          while( realvalue<1.0 ){ realvalue *= 10.0; exp--; }
+          while( realvalue<LITDBL(1e-8) ){ realvalue *= LITDBL(1e8); exp-=8; }
+          while( realvalue<LITDBL(1.0) ){ realvalue *= LITDBL(10.0); exp--; }
           if( exp>350 ){
             bufpt = buf;
             buf[0] = prefix;
@@ -502,7 +502,7 @@ void sqlite3VXPrintf(
         */
         if( xtype!=etFLOAT ){
           realvalue += rounder;
-          if( realvalue>=10.0 ){ realvalue *= 0.1; exp++; }
+          if( realvalue>=LITDBL(10.0) ){ realvalue *= LITDBL(0.1); exp++; }
         }
         if( xtype==etGENERIC ){
           flag_rtz = !flag_alternateform;

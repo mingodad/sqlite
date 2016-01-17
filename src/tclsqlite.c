@@ -804,7 +804,7 @@ static void tclSqlFunc(sqlite3_context *context, int argc, sqlite3_value**argv){
           break;
         }
         case SQLITE_FLOAT: {
-          double r = sqlite3_value_double(pIn);
+          sqlite_double r = sqlite3_value_double(pIn);
           pVal = Tcl_NewDoubleObj(r);
           break;
         }

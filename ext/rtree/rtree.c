@@ -164,7 +164,7 @@ struct Rtree {
   typedef int RtreeValue;                  /* Low accuracy coordinate */
 # define RTREE_ZERO 0
 #else
-  typedef double RtreeDValue;              /* High accuracy coordinate */
+  typedef sqlite_double RtreeDValue;              /* High accuracy coordinate */
   typedef float RtreeValue;                /* Low accuracy coordinate */
 # define RTREE_ZERO 0.0
 #endif
@@ -250,7 +250,7 @@ union RtreeCoord {
 
 /*
 ** The argument is an RtreeCoord. Return the value stored within the RtreeCoord
-** formatted as a RtreeDValue (double or int64). This macro assumes that local
+** formatted as a RtreeDValue (sqlite_double or int64). This macro assumes that local
 ** variable pRtree points to the Rtree structure associated with the
 ** RtreeCoord.
 */
@@ -259,8 +259,8 @@ union RtreeCoord {
 #else
 # define DCOORD(coord) (                           \
     (pRtree->eCoordType==RTREE_COORD_REAL32) ?      \
-      ((double)coord.f) :                           \
-      ((double)coord.i)                             \
+      ((sqlite_double)coord.f) :                           \
+      ((sqlite_double)coord.i)                             \
   )
 #endif
 
@@ -1000,7 +1000,7 @@ static void rtreeNonleafConstraint(
   u8 *pCellData,             /* Raw cell content as appears on disk */
   int *peWithin              /* Adjust downward, as appropriate */
 ){
-  sqlite3_rtree_dbl val;     /* Coordinate value convert to a double */
+  sqlite3_rtree_dbl val;     /* Coordinate value convert to a sqlite_double */
 
   /* p->iCoord might point to either a lower or upper bound coordinate
   ** in a coordinate pair.  But make pCellData point to the lower bound.
@@ -1044,7 +1044,7 @@ static void rtreeLeafConstraint(
   u8 *pCellData,             /* Raw cell content as appears on disk */
   int *peWithin              /* Adjust downward, as appropriate */
 ){
-  RtreeDValue xN;      /* Coordinate value converted to a double */
+  RtreeDValue xN;      /* Coordinate value converted to a sqlite_double */
 
   assert(p->op==RTREE_LE || p->op==RTREE_LT || p->op==RTREE_GE 
       || p->op==RTREE_GT || p->op==RTREE_EQ );
@@ -1742,7 +1742,7 @@ static int rtreeBestIndex(sqlite3_vtab *tab, sqlite3_index_info *pIdxInfo){
   }
 
   nRow = pRtree->nRowEst / (iIdx + 1);
-  pIdxInfo->estimatedCost = (double)6.0 * (double)nRow;
+  pIdxInfo->estimatedCost = (sqlite_double)LITDBL(6.0) * (sqlite_double)nRow;
   setEstimatedRows(pIdxInfo, nRow);
 
   return rc;
@@ -2772,7 +2772,7 @@ static int rtreeDeleteRowid(Rtree *pRtree, sqlite3_int64 iDelete){
 }
 
 /*
-** Rounding constants for float->double conversion.
+** Rounding constants for float->sqlite_double conversion.
 */
 #define RNDTOWARDS  (1.0 - 1.0/8388608.0)  /* Round towards zero */
 #define RNDAWAY     (1.0 + 1.0/8388608.0)  /* Round away from zero */
@@ -2783,7 +2783,7 @@ static int rtreeDeleteRowid(Rtree *pRtree, sqlite3_int64 iDelete){
 ** while taking care to round toward negative or positive, respectively.
 */
 static RtreeValue rtreeValueDown(sqlite3_value *v){
-  double d = sqlite3_value_double(v);
+  sqlite_double d = sqlite3_value_double(v);
   float f = (float)d;
   if( f>d ){
     f = (float)(d*(d<0 ? RNDAWAY : RNDTOWARDS));
@@ -2791,7 +2791,7 @@ static RtreeValue rtreeValueDown(sqlite3_value *v){
   return f;
 }
 static RtreeValue rtreeValueUp(sqlite3_value *v){
-  double d = sqlite3_value_double(v);
+  sqlite_double d = sqlite3_value_double(v);
   float f = (float)d;
   if( f<d ){
     f = (float)(d*(d<0 ? RNDTOWARDS : RNDAWAY));
@@ -3303,7 +3303,7 @@ static void rtreenode(sqlite3_context *ctx, int nArg, sqlite3_value **apArg){
     for(jj=0; jj<tree.nDim*2; jj++){
 #ifndef SQLITE_RTREE_INT_ONLY
       sqlite3_snprintf(512-nCell,&zCell[nCell], " %g",
-                       (double)cell.aCoord[jj].f);
+                       (sqlite_double)cell.aCoord[jj].f);
 #else
       sqlite3_snprintf(512-nCell,&zCell[nCell], " %d",
                        cell.aCoord[jj].i);

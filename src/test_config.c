@@ -443,7 +443,7 @@ static void set_options(Tcl_Interp *interp){
 #endif
 
 Tcl_SetVar2(interp, "sqlite_options", "long_double",
-              sizeof(LONGDOUBLE_TYPE)>sizeof(double) ? "1" : "0",
+              sizeof(LONGDOUBLE_TYPE)>sizeof(sqlite_double) ? "1" : "0",
               TCL_GLOBAL_ONLY);
 
 #ifdef SQLITE_OMIT_MEMORYDB

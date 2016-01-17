@@ -1379,7 +1379,7 @@ static int sqlite3_snprintf_str(
 /*
 ** Usage:  sqlite3_mprintf_double FORMAT INTEGER INTEGER DOUBLE
 **
-** Call mprintf with two integer arguments and one double argument
+** Call mprintf with two integer arguments and one sqlite_double argument
 */
 static int sqlite3_mprintf_double(
   void *NotUsed,
@@ -1399,7 +1399,7 @@ static int sqlite3_mprintf_double(
     if( Tcl_GetInt(interp, argv[i], &a[i-2]) ) return TCL_ERROR;
   }
   if( Tcl_GetDouble(interp, argv[4], &r) ) return TCL_ERROR;
-  z = sqlite3_mprintf(argv[1], a[0], a[1], r);
+  z = sqlite3_mprintf(argv[1], a[0], a[1], (sqlite_double)r);
   Tcl_AppendResult(interp, z, 0);
   sqlite3_free(z);
   return TCL_OK;
@@ -1408,7 +1408,7 @@ static int sqlite3_mprintf_double(
 /*
 ** Usage:  sqlite3_mprintf_scaled FORMAT DOUBLE DOUBLE
 **
-** Call mprintf with a single double argument which is the product of the
+** Call mprintf with a single sqlite_double argument which is the product of the
 ** two arguments given above.  This is used to generate overflow and underflow
 ** doubles to test that they are converted properly.
 */
@@ -1429,7 +1429,7 @@ static int sqlite3_mprintf_scaled(
   for(i=2; i<4; i++){
     if( Tcl_GetDouble(interp, argv[i], &r[i-2]) ) return TCL_ERROR;
   }
-  z = sqlite3_mprintf(argv[1], r[0]*r[1]);
+  z = sqlite3_mprintf(argv[1], (sqlite_double)(r[0]*r[1]));
   Tcl_AppendResult(interp, z, 0);
   sqlite3_free(z);
   return TCL_OK;
@@ -1438,7 +1438,7 @@ static int sqlite3_mprintf_scaled(
 /*
 ** Usage:  sqlite3_mprintf_stronly FORMAT STRING
 **
-** Call mprintf with a single double argument which is the product of the
+** Call mprintf with a single sqlite_double argument which is the product of the
 ** two arguments given above.  This is used to generate overflow and underflow
 ** doubles to test that they are converted properly.
 */
@@ -1463,8 +1463,8 @@ static int sqlite3_mprintf_stronly(
 /*
 ** Usage:  sqlite3_mprintf_hexdouble FORMAT HEX
 **
-** Call mprintf with a single double argument which is derived from the
-** hexadecimal encoding of an IEEE double.
+** Call mprintf with a single sqlite_double argument which is derived from the
+** hexadecimal encoding of an IEEE sqlite_double.
 */
 static int sqlite3_mprintf_hexdouble(
   void *NotUsed,
@@ -1473,7 +1473,7 @@ static int sqlite3_mprintf_hexdouble(
   char **argv            /* Text of each argument */
 ){
   char *z;
-  double r;
+  sqlite_double r;
   unsigned int x1, x2;
   sqlite_uint64 d;
   if( argc!=3 ){
@@ -4357,7 +4357,7 @@ static int test_column_blob(
 /*
 ** Usage: sqlite3_column_double STMT column
 **
-** Return the data in column 'column' of the current row cast as a double.
+** Return the data in column 'column' of the current row cast as a sqlite_double .
 */
 static int test_column_double(
   void * clientData,
@@ -4367,7 +4367,7 @@ static int test_column_double(
 ){
   sqlite3_stmt *pStmt;
   int col;
-  double rVal;
+  sqlite_double rVal;
 
   if( objc!=3 ){
     Tcl_AppendResult(interp, "wrong # args: should be \"", 

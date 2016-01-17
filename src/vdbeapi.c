@@ -178,7 +178,7 @@ int sqlite3_value_bytes(sqlite3_value *pVal){
 int sqlite3_value_bytes16(sqlite3_value *pVal){
   return sqlite3ValueBytes(pVal, SQLITE_UTF16NATIVE);
 }
-double sqlite3_value_double(sqlite3_value *pVal){
+sqlite_double sqlite3_value_double(sqlite3_value *pVal){
   return sqlite3VdbeRealValue((Mem*)pVal);
 }
 int sqlite3_value_int(sqlite3_value *pVal){
@@ -338,7 +338,7 @@ void sqlite3_result_blob64(
     setResultStrOrError(pCtx, z, (int)n, 0, xDel);
   }
 }
-void sqlite3_result_double(sqlite3_context *pCtx, double rVal){
+void sqlite3_result_double(sqlite3_context *pCtx, sqlite_double rVal){
   assert( sqlite3_mutex_held(pCtx->pOut->db->mutex) );
   sqlite3VdbeMemSetDouble(pCtx->pOut, rVal);
 }
@@ -1010,8 +1010,8 @@ int sqlite3_column_bytes16(sqlite3_stmt *pStmt, int i){
   columnMallocFailure(pStmt);
   return val;
 }
-double sqlite3_column_double(sqlite3_stmt *pStmt, int i){
-  double val = sqlite3_value_double( columnMem(pStmt,i) );
+sqlite_double sqlite3_column_double(sqlite3_stmt *pStmt, int i){
+  sqlite_double val = sqlite3_value_double( columnMem(pStmt,i) );
   columnMallocFailure(pStmt);
   return val;
 }
@@ -1314,7 +1314,7 @@ int sqlite3_bind_blob64(
     return bindText(pStmt, i, zData, (int)nData, xDel, 0);
   }
 }
-int sqlite3_bind_double(sqlite3_stmt *pStmt, int i, double rValue){
+int sqlite3_bind_double(sqlite3_stmt *pStmt, int i, sqlite_double rValue){
   int rc;
   Vdbe *p = (Vdbe *)pStmt;
   rc = vdbeUnbind(p, i);

@@ -121,7 +121,7 @@ static void (*vlogDlSym(sqlite3_vfs *pVfs, void *p, const char*zSym))(void);
 static void vlogDlClose(sqlite3_vfs*, void*);
 static int vlogRandomness(sqlite3_vfs*, int nByte, char *zOut);
 static int vlogSleep(sqlite3_vfs*, int microseconds);
-static int vlogCurrentTime(sqlite3_vfs*, double*);
+static int vlogCurrentTime(sqlite3_vfs*, sqlite_double*);
 static int vlogGetLastError(sqlite3_vfs*, int, char *);
 static int vlogCurrentTimeInt64(sqlite3_vfs*, sqlite3_int64*);
 
@@ -738,7 +738,7 @@ static int vlogSleep(sqlite3_vfs *pVfs, int nMicro){
 /*
 ** Return the current time as a Julian Day number in *pTimeOut.
 */
-static int vlogCurrentTime(sqlite3_vfs *pVfs, double *pTimeOut){
+static int vlogCurrentTime(sqlite3_vfs *pVfs, sqlite_double *pTimeOut){
   return REALVFS(pVfs)->xCurrentTime(REALVFS(pVfs), pTimeOut);
 }
 

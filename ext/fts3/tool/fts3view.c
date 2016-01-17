@@ -338,17 +338,17 @@ static void showSegmentStats(sqlite3 *db, const char *zTab){
   printf("Total size of all root segments.......... %9lld\n", szRoot);
   if( nSeg>0 ){
     printf("Average size of all segments............. %11.1f\n",
-            (double)(szSeg+szRoot)/(double)(nSeg+nRoot));
+            (sqlite_double)(szSeg+szRoot)/(sqlite_double)(nSeg+nRoot));
     printf("Average size of leaf segments............ %11.1f\n",
-            (double)(szSeg-szIdx)/(double)(nSeg-nIdx));
+            (sqlite_double)(szSeg-szIdx)/(sqlite_double)(nSeg-nIdx));
   }
   if( nIdx>0 ){
     printf("Average size of index segments........... %11.1f\n",
-            (double)szIdx/(double)nIdx);
+            (sqlite_double)szIdx/(sqlite_double)nIdx);
   }
   if( nRoot>0 ){
     printf("Average size of root segments............ %11.1f\n",
-            (double)szRoot/(double)nRoot);
+            (sqlite_double)szRoot/(sqlite_double)nRoot);
   }
   mx = mxSeg;
   if( mx<mxRoot ) mx = mxRoot;
@@ -405,7 +405,7 @@ static void showSegmentStats(sqlite3 *db, const char *zTab){
       printf("  Number of leaf segments................ %9d\n", nLeaf);
       if( nIdx>1 ){
         printf("  Average leaf segments per index........ %11.1f\n",
-               (double)nLeaf/(double)nIdx);
+               (sqlite_double)nLeaf/(sqlite_double)nIdx);
       }
       printf("  Total size of all leaf segments........ %9lld\n",
              (sz = sqlite3_column_int64(pStmt, 1)));

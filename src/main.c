@@ -269,7 +269,7 @@ int sqlite3_initialize(void){
   /* This section of code's only "output" is via assert() statements. */
   if ( rc==SQLITE_OK ){
     u64 x = (((u64)1)<<63)-1;
-    double y;
+    sqlite_double y;
     assert(sizeof(x)==8);
     assert(sizeof(x)==sizeof(y));
     memcpy(&y, &x, 8);

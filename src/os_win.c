@@ -5506,12 +5506,12 @@ static int winCurrentTimeInt64(sqlite3_vfs *pVfs, sqlite3_int64 *piNow){
 ** current time and date as a Julian Day number into *prNow and
 ** return 0.  Return 1 if the time and date cannot be found.
 */
-static int winCurrentTime(sqlite3_vfs *pVfs, double *prNow){
+static int winCurrentTime(sqlite3_vfs *pVfs, sqlite_double *prNow){
   int rc;
   sqlite3_int64 i;
   rc = winCurrentTimeInt64(pVfs, &i);
   if( !rc ){
-    *prNow = i/86400000.0;
+    *prNow = i/LITDBL(86400000.0);
   }
   return rc;
 }

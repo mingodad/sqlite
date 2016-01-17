@@ -27,15 +27,15 @@
 typedef struct Circle Circle;
 struct Circle {
   struct Box {
-    double xmin;
-    double xmax;
-    double ymin;
-    double ymax;
+    sqlite_double  xmin;
+    sqlite_double  xmax;
+    sqlite_double  ymin;
+    sqlite_double  ymax;
   } aBox[2];
-  double centerx;
-  double centery;
-  double radius;
-  double mxArea;
+  sqlite_double  centerx;
+  sqlite_double  centery;
+  sqlite_double  radius;
+  sqlite_double mxArea;
   int eScoreType;
 };
 
@@ -57,8 +57,8 @@ static int circle_geom(
 ){
   int i;                          /* Iterator variable */
   Circle *pCircle;                /* Structure defining circular region */
-  double xmin, xmax;              /* X dimensions of box being tested */
-  double ymin, ymax;              /* X dimensions of box being tested */
+  sqlite_double  xmin, xmax;              /* X dimensions of box being tested */
+  sqlite_double  ymin, ymax;              /* X dimensions of box being tested */
 
   xmin = aCoord[0];
   xmax = aCoord[1];
@@ -119,9 +119,9 @@ static int circle_geom(
   ** intersect the region of interest. Set the output variable to true and
   ** return SQLITE_OK in this case. */
   for(i=0; i<4; i++){
-    double x = (i&0x01) ? xmax : xmin;
-    double y = (i&0x02) ? ymax : ymin;
-    double d2;
+    sqlite_double  x = (i&0x01) ? xmax : xmin;
+    sqlite_double  y = (i&0x02) ? ymax : ymin;
+    sqlite_double  d2;
     
     d2  = (x-pCircle->centerx)*(x-pCircle->centerx);
     d2 += (y-pCircle->centery)*(y-pCircle->centery);
@@ -357,12 +357,12 @@ static int bfs_query_func(sqlite3_rtree_query_info *p){
 
 typedef struct Cube Cube;
 struct Cube {
-  double x;
-  double y;
-  double z;
-  double width;
-  double height;
-  double depth;
+  sqlite_double  x;
+  sqlite_double  y;
+  sqlite_double  z;
+  sqlite_double  width;
+  sqlite_double  height;
+  sqlite_double  depth;
 };
 
 static void cube_context_free(void *p){

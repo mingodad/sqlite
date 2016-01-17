@@ -56,7 +56,7 @@ int sqlite3FaultSim(int iTest){
 ** Use the math library isnan() function if compiled with SQLITE_HAVE_ISNAN.
 ** Otherwise, we have our own implementation that works on most systems.
 */
-int sqlite3IsNaN(double x){
+int sqlite3IsNaN(sqlite_double x){
   int rc;   /* The value return */
 #if !SQLITE_HAVE_ISNAN && !HAVE_ISNAN
   /*
@@ -85,8 +85,8 @@ int sqlite3IsNaN(double x){
 #ifdef __FAST_MATH__
 # error SQLite will not work correctly with the -ffast-math option of GCC.
 #endif
-  volatile double y = x;
-  volatile double z = y;
+  volatile sqlite_double y = x;
+  volatile sqlite_double z = y;
   rc = (y!=z);
 #else  /* if HAVE_ISNAN */
   rc = isnan(x);
@@ -274,7 +274,7 @@ int sqlite3_strnicmp(const char *zLeft, const char *zRight, int N){
 
 /*
 ** The string z[] is an text representation of a real number.
-** Convert this string to a double and write it into *pResult.
+** Convert this string to a sqlite_double and write it into *pResult.
 **
 ** The string z[] is length bytes in length (bytes, not characters) and
 ** uses the encoding enc.  The string is not necessarily zero-terminated.
@@ -294,7 +294,7 @@ int sqlite3_strnicmp(const char *zLeft, const char *zRight, int N){
 ** returns FALSE but it still converts the prefix and writes the result
 ** into *pResult.
 */
-int sqlite3AtoF(const char *z, double *pResult, int length, u8 enc){
+int sqlite3AtoF(const char *z, sqlite_double *pResult, int length, u8 enc){
 #ifndef SQLITE_OMIT_FLOATING_POINT
   int incr;
   const char *zEnd = z + length;
@@ -305,12 +305,12 @@ int sqlite3AtoF(const char *z, double *pResult, int length, u8 enc){
   int esign = 1;   /* sign of exponent */
   int e = 0;       /* exponent */
   int eValid = 1;  /* True exponent is either not used or is well-formed */
-  double result;
+  sqlite_double result;
   int nDigits = 0;
   int nonNum = 0;
 
   assert( enc==SQLITE_UTF8 || enc==SQLITE_UTF16LE || enc==SQLITE_UTF16BE );
-  *pResult = 0.0;   /* Default return value, in case of an error */
+  *pResult = LITDBL(0.0);   /* Default return value, in case of an error */
 
   if( enc==SQLITE_UTF8 ){
     incr = 1;
@@ -403,7 +403,7 @@ do_atof_calc:
   if( !s ) {
     /* In the IEEE 754 standard, zero is signed.
     ** Add the sign if we've seen at least one digit */
-    result = (sign<0 && nDigits) ? -(double)0 : (double)0;
+    result = (sign<0 && nDigits) ? -(sqlite_double)0 : (sqlite_double)0;
   } else {
     /* attempt to reduce exponent */
     if( esign>0 ){
@@ -421,25 +421,25 @@ do_atof_calc:
       LONGDOUBLE_TYPE scale = 1.0;
       /* attempt to handle extremely small/large numbers better */
       if( e>307 && e<342 ){
-        while( e%308 ) { scale *= 1.0e+1; e -= 1; }
+        while( e%308 ) { scale *= LITDBL(1.0e+1); e -= 1; }
         if( esign<0 ){
           result = s / scale;
-          result /= 1.0e+308;
+          result /= LITDBL(1.0e+308);
         }else{
           result = s * scale;
-          result *= 1.0e+308;
+          result *= LITDBL(1.0e+308);
         }
       }else if( e>=342 ){
         if( esign<0 ){
-          result = 0.0*s;
+          result = LITDBL(0.0)*s;
         }else{
-          result = 1e308*1e308*s;  /* Infinity */
+          result = LITDBL(1e308)*LITDBL(1e308)*s;  /* Infinity */
         }
       }else{
         /* 1.0e+22 is the largest power of 10 than can be 
         ** represented exactly. */
-        while( e%22 ) { scale *= 1.0e+1; e -= 1; }
-        while( e>0 ) { scale *= 1.0e+22; e -= 22; }
+        while( e%22 ) { scale *= LITDBL(1.0e+1); e -= 1; }
+        while( e>0 ) { scale *= LITDBL(1.0e+22); e -= 22; }
         if( esign<0 ){
           result = s / scale;
         }else{
@@ -447,7 +447,7 @@ do_atof_calc:
         }
       }
     } else {
-      result = (double)s;
+      result = (sqlite_double)s;
     }
   }
 

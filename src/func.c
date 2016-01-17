@@ -162,7 +162,7 @@ static void absFunc(sqlite3_context *context, int argc, sqlite3_value **argv){
       ** IMP: R-01992-00519 Abs(X) returns 0.0 if X is a string or blob
       ** that cannot be converted to a numeric value.
       */
-      double rVal = sqlite3_value_double(argv[0]);
+      sqlite_double rVal = sqlite3_value_double(argv[0]);
       if( rVal<0 ) rVal = -rVal;
       sqlite3_result_double(context, rVal);
       break;
@@ -355,7 +355,7 @@ static void substrFunc(
 #ifndef SQLITE_OMIT_FLOATING_POINT
 static void roundFunc(sqlite3_context *context, int argc, sqlite3_value **argv){
   int n = 0;
-  double r;
+  sqlite_double r;
   char *zBuf;
   assert( argc==1 || argc==2 );
   if( argc==2 ){
@@ -371,9 +371,9 @@ static void roundFunc(sqlite3_context *context, int argc, sqlite3_value **argv){
   ** otherwise use printf.
   */
   if( n==0 && r>=0 && r<LARGEST_INT64-1 ){
-    r = (double)((sqlite_int64)(r+0.5));
+    r = (sqlite_double)((sqlite_int64)(r+LITDBL(0.5)));
   }else if( n==0 && r<0 && (-r)<LARGEST_INT64-1 ){
-    r = -(double)((sqlite_int64)((-r)+0.5));
+    r = -(sqlite_double)((sqlite_int64)((-r)+LITDBL(0.5)));
   }else{
     zBuf = sqlite3_mprintf("%.*f",n,r);
     if( zBuf==0 ){
@@ -972,7 +972,7 @@ static void quoteFunc(sqlite3_context *context, int argc, sqlite3_value **argv){
   UNUSED_PARAMETER(argc);
   switch( sqlite3_value_type(argv[0]) ){
     case SQLITE_FLOAT: {
-      double r1, r2;
+      sqlite_double r1, r2;
       char zBuf[50];
       r1 = sqlite3_value_double(argv[0]);
       sqlite3_snprintf(sizeof(zBuf), zBuf, "%!.15g", r1);
@@ -1404,7 +1404,7 @@ static void loadExt(sqlite3_context *context, int argc, sqlite3_value **argv){
 */
 typedef struct SumCtx SumCtx;
 struct SumCtx {
-  double rSum;      /* Floating point sum */
+  sqlite_double rSum;      /* Floating point sum */
   i64 iSum;         /* Integer sum */   
   i64 cnt;          /* Number of elements summed */
   u8 overflow;      /* True if integer overflow seen */
@@ -1459,14 +1459,14 @@ static void avgFinalize(sqlite3_context *context){
   SumCtx *p;
   p = sqlite3_aggregate_context(context, 0);
   if( p && p->cnt>0 ){
-    sqlite3_result_double(context, p->rSum/(double)p->cnt);
+    sqlite3_result_double(context, p->rSum/(sqlite_double)p->cnt);
   }
 }
 static void totalFinalize(sqlite3_context *context){
   SumCtx *p;
   p = sqlite3_aggregate_context(context, 0);
-  /* (double)0 In case of SQLITE_OMIT_FLOATING_POINT... */
-  sqlite3_result_double(context, p ? p->rSum : (double)0);
+  /* (sqlite_double)0 In case of SQLITE_OMIT_FLOATING_POINT... */
+  sqlite3_result_double(context, p ? p->rSum : (sqlite_double)0);
 }
 
 /*

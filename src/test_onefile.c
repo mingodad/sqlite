@@ -170,7 +170,7 @@ static void (*fsDlSym(sqlite3_vfs*,void*, const char *zSymbol))(void);
 static void fsDlClose(sqlite3_vfs*, void*);
 static int fsRandomness(sqlite3_vfs*, int nByte, char *zOut);
 static int fsSleep(sqlite3_vfs*, int microseconds);
-static int fsCurrentTime(sqlite3_vfs*, double*);
+static int fsCurrentTime(sqlite3_vfs*, sqlite_double*);
 
 
 typedef struct fs_vfs_t fs_vfs_t;
@@ -807,7 +807,7 @@ static int fsSleep(sqlite3_vfs *pVfs, int nMicro){
 /*
 ** Return the current time as a Julian Day number in *pTimeOut.
 */
-static int fsCurrentTime(sqlite3_vfs *pVfs, double *pTimeOut){
+static int fsCurrentTime(sqlite3_vfs *pVfs, sqlite_double *pTimeOut){
   sqlite3_vfs *pParent = ((fs_vfs_t *)pVfs)->pParent;
   return pParent->xCurrentTime(pParent, pTimeOut);
 }

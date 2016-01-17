@@ -168,9 +168,9 @@ static sqlite3_int64 timeOfDay(void){
   if( clockVfs->iVersion>=2 && clockVfs->xCurrentTimeInt64!=0 ){
     clockVfs->xCurrentTimeInt64(clockVfs, &t);
   }else{
-    double r;
+    sqlite_double r;
     clockVfs->xCurrentTime(clockVfs, &r);
-    t = (sqlite3_int64)(r*86400000.0);
+    t = (sqlite3_int64)(r*LITDBL(86400000.0));
   }
   return t;
 }
@@ -623,6 +623,8 @@ struct ShellState {
   int *aiIndent;         /* Array of indents used in MODE_Explain */
   int nIndent;           /* Size of array aiIndent[] */
   int iIndent;           /* Index of current op in aiIndent[] */
+  int dumpDataOnly; /*when dump a database exclude schema */
+  int doStartTransaction; /* when dumping schema only before first record output "BEGIN;" */
 };
 
 /*
@@ -972,6 +974,7 @@ static int shell_callback(
       break;
     }
     case MODE_Semi:
+      if((p->cnt == 0) && p->doStartTransaction ) fprintf(p->out,"BEGIN TRANSACTION;\n");
     case MODE_List: {
       if( p->cnt++==0 && p->showHeader ){
         for(i=0; i<nArg; i++){
@@ -1411,11 +1414,11 @@ static void display_scanstats(
   raw_printf(pArg->out, "-------- scanstats --------\n");
   mx = 0;
   for(k=0; k<=mx; k++){
-    double rEstLoop = 1.0;
+    sqlite_double rEstLoop = 1.0;
     for(i=n=0; 1; i++){
       sqlite3_stmt *p = pArg->pStmt;
       sqlite3_int64 nLoop, nVisit;
-      double rEst;
+      sqlite_double rEst;
       int iSid;
       const char *zExplain;
       if( sqlite3_stmt_scanstatus(p, i, SQLITE_SCANSTAT_NLOOP, (void*)&nLoop) ){
@@ -1425,7 +1428,7 @@ static void display_scanstats(
       if( iSid>mx ) mx = iSid;
       if( iSid!=k ) continue;
       if( n==0 ){
-        rEstLoop = (double)nLoop;
+        rEstLoop = (sqlite_double)nLoop;
         if( k>0 ) raw_printf(pArg->out, "-------- subquery %d -------\n", k);
       }
       n++;
@@ -1732,6 +1735,7 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azCol){
   zType = azArg[1];
   zSql = azArg[2];
   
+  if( !p->dumpDataOnly ){
   if( strcmp(zTable, "sqlite_sequence")==0 ){
     zPrepStmt = "DELETE FROM sqlite_sequence;\n";
   }else if( sqlite3_strglob("sqlite_stat?", zTable)==0 ){
@@ -1753,6 +1757,7 @@ static int dump_callback(void *pArg, int nArg, char **azArg, char **azCol){
     return 0;
   }else{
     utf8_printf(p->out, "%s;\n", zSql);
+  }
   }
 
   if( strcmp(zType, "table")==0 ){
@@ -1864,6 +1869,7 @@ static char zHelp[] =
   ".dump ?TABLE? ...      Dump the database in an SQL text format\n"
   "                         If TABLE specified, only dump tables matching\n"
   "                         LIKE pattern TABLE.\n"
+  ".dumpdata  ?TABLE? ...     Like .dump without schema\n"
   ".echo on|off           Turn command echo on or off\n"
   ".eqp on|off            Enable or disable automatic EXPLAIN QUERY PLAN\n"
   ".exit                  Exit this program\n"
@@ -2872,7 +2878,8 @@ static int do_meta_command(char *zLine, ShellState *p){
     rc = shell_dbinfo_command(p, nArg, azArg);
   }else
 
-  if( c=='d' && strncmp(azArg[0], "dump", n)==0 ){
+  if( c=='d' && ((strncmp(azArg[0], "dump", n)==0) ||
+      (p->dumpDataOnly = (strncmp(azArg[0], "dumpdata", n)==0))) ){
     open_db(p, 0);
     /* When playing back a "dump", the content might appear in an order
     ** which causes immediate foreign key constraints to be violated.
@@ -2892,14 +2899,16 @@ static int do_meta_command(char *zLine, ShellState *p){
         "SELECT name, type, sql FROM sqlite_master "
         "WHERE sql NOT NULL AND type=='table' AND name!='sqlite_sequence'"
       );
-      run_schema_dump_query(p, 
-        "SELECT name, type, sql FROM sqlite_master "
-        "WHERE name=='sqlite_sequence'"
-      );
-      run_table_dump_query(p,
-        "SELECT sql FROM sqlite_master "
-        "WHERE sql NOT NULL AND type IN ('index','trigger','view')", 0
-      );
+      if(!p->dumpDataOnly){
+        run_schema_dump_query(p, 
+          "SELECT name, type, sql FROM sqlite_master "
+          "WHERE name=='sqlite_sequence'"
+        );
+        run_table_dump_query(p,
+          "SELECT sql FROM sqlite_master "
+          "WHERE sql NOT NULL AND type IN ('index','trigger','view')", 0
+        );
+      }
     }else{
       int i;
       for(i=1; i<nArg; i++){
@@ -2908,12 +2917,14 @@ static int do_meta_command(char *zLine, ShellState *p){
           "SELECT name, type, sql FROM sqlite_master "
           "WHERE tbl_name LIKE shellstatic() AND type=='table'"
           "  AND sql NOT NULL");
-        run_table_dump_query(p,
-          "SELECT sql FROM sqlite_master "
-          "WHERE sql NOT NULL"
-          "  AND type IN ('index','trigger','view')"
-          "  AND tbl_name LIKE shellstatic()", 0
-        );
+        if(!p->dumpDataOnly){
+          run_table_dump_query(p,
+            "SELECT sql FROM sqlite_master "
+            "WHERE sql NOT NULL"
+            "  AND type IN ('index','trigger','view')"
+            "  AND tbl_name LIKE shellstatic()", 0
+          );
+        }
         zShellStatic = 0;
       }
     }
@@ -2924,6 +2935,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     sqlite3_exec(p->db, "PRAGMA writable_schema=OFF;", 0, 0, 0);
     sqlite3_exec(p->db, "RELEASE dump;", 0, 0, 0);
     raw_printf(p->out, p->nErr ? "ROLLBACK; -- due to errors\n" : "COMMIT;\n");
+    p->dumpDataOnly = 0; /* reset data only flag */
   }else
 
   if( c=='e' && strncmp(azArg[0], "echo", n)==0 ){
@@ -2997,6 +3009,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     memcpy(&data, p, sizeof(data));
     data.showHeader = 0;
     data.mode = MODE_Semi;
+    data.doStartTransaction = 1;
     rc = sqlite3_exec(p->db,
        "SELECT sql FROM"
        "  (SELECT sql sql, type type, tbl_name tbl_name, name name, rowid x"
@@ -3033,6 +3046,7 @@ static int do_meta_command(char *zLine, ShellState *p){
                  shell_callback, &data, &zErrMsg);
       raw_printf(p->out, "ANALYZE sqlite_master;\n");
     }
+    if(data.cnt) fprintf(p->out, "COMMIT;\n");
   }else
 
   if( c=='h' && strncmp(azArg[0], "headers", n)==0 ){
@@ -3629,6 +3643,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     memcpy(&data, p, sizeof(data));
     data.showHeader = 0;
     data.mode = MODE_Semi;
+    data.doStartTransaction = 1;
     if( nArg==2 ){
       int i;
       for(i=0; azArg[1][i]; i++) azArg[1][i] = ToLower(azArg[1][i]);
@@ -3698,6 +3713,7 @@ static int do_meta_command(char *zLine, ShellState *p){
     }else{
       rc = 0;
     }
+    if((rc == 0) && data.cnt) fprintf(data.out, "COMMIT;\n");
   }else
 
 

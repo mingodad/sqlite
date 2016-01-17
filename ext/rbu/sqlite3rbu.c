@@ -3949,7 +3949,7 @@ static int rbuVfsSleep(sqlite3_vfs *pVfs, int nMicro){
 /*
 ** Return the current time as a Julian Day number in *pTimeOut.
 */
-static int rbuVfsCurrentTime(sqlite3_vfs *pVfs, double *pTimeOut){
+static int rbuVfsCurrentTime(sqlite3_vfs *pVfs, sqlite_double *pTimeOut){
   sqlite3_vfs *pRealVfs = ((rbu_vfs*)pVfs)->pRealVfs;
   return pRealVfs->xCurrentTime(pRealVfs, pTimeOut);
 }

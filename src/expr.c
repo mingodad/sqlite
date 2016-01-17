@@ -2257,7 +2257,7 @@ static void sqlite3ExprCodeIN(
 */
 static void codeReal(Vdbe *v, const char *z, int negateFlag, int iMem){
   if( ALWAYS(z!=0) ){
-    double value;
+    sqlite_double value;
     sqlite3AtoF(z, &value, sqlite3Strlen30(z), SQLITE_UTF8);
     assert( !sqlite3IsNaN(value) ); /* The new AtoF never returns NaN */
     if( negateFlag ) value = -value;

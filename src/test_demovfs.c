@@ -601,7 +601,7 @@ static int demoSleep(sqlite3_vfs *pVfs, int nMicro){
 ** value, it will stop working some time in the year 2038 AD (the so-called
 ** "year 2038" problem that afflicts systems that store time this way). 
 */
-static int demoCurrentTime(sqlite3_vfs *pVfs, double *pTime){
+static int demoCurrentTime(sqlite3_vfs *pVfs, sqlite_double *pTime){
   time_t t = time(0);
   *pTime = t/86400.0 + 2440587.5; 
   return SQLITE_OK;

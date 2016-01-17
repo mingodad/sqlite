@@ -51,7 +51,7 @@ struct VdbeOp {
     void *p;               /* Generic pointer */
     char *z;               /* Pointer to data for string (char array) types */
     i64 *pI64;             /* Used when p4type is P4_INT64 */
-    double *pReal;         /* Used when p4type is P4_REAL */
+    sqlite_double *pReal;         /* Used when p4type is P4_REAL */
     FuncDef *pFunc;        /* Used when p4type is P4_FUNCDEF */
     sqlite3_context *pCtx; /* Used when p4type is P4_FUNCCTX */
     CollSeq *pColl;        /* Used when p4type is P4_COLLSEQ */

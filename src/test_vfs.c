@@ -185,7 +185,7 @@ static void tvfsDlClose(sqlite3_vfs*, void*);
 #endif /* SQLITE_OMIT_LOAD_EXTENSION */
 static int tvfsRandomness(sqlite3_vfs*, int nByte, char *zOut);
 static int tvfsSleep(sqlite3_vfs*, int microseconds);
-static int tvfsCurrentTime(sqlite3_vfs*, double*);
+static int tvfsCurrentTime(sqlite3_vfs*, sqlite_double *);
 
 static int tvfsShmOpen(sqlite3_file*);
 static int tvfsShmLock(sqlite3_file*, int , int, int);
@@ -786,7 +786,7 @@ static int tvfsSleep(sqlite3_vfs *pVfs, int nMicro){
 /*
 ** Return the current time as a Julian Day number in *pTimeOut.
 */
-static int tvfsCurrentTime(sqlite3_vfs *pVfs, double *pTimeOut){
+static int tvfsCurrentTime(sqlite3_vfs *pVfs, sqlite_double  *pTimeOut){
   return PARENTVFS(pVfs)->xCurrentTime(PARENTVFS(pVfs), pTimeOut);
 }
 

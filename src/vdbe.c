@@ -241,7 +241,7 @@ static VdbeCursor *allocateCursor(
 ** if there is an exact integer representation of the quantity.
 */
 static void applyNumericAffinity(Mem *pRec, int bTryForInt){
-  double rValue;
+  sqlite_double rValue;
   i64 iValue;
   u8 enc = pRec->enc;
   assert( (pRec->flags & (MEM_Str|MEM_Int|MEM_Real))==MEM_Str );
@@ -1472,8 +1472,8 @@ case OP_Remainder: {           /* same as TK_REM, in1, in2, out3 */
   u16 type2;      /* Numeric type of right operand */
   i64 iA;         /* Integer value of left operand */
   i64 iB;         /* Integer value of right operand */
-  double rA;      /* Real value of left operand */
-  double rB;      /* Real value of right operand */
+  sqlite_double rA;      /* Real value of left operand */
+  sqlite_double rB;      /* Real value of right operand */
 
   pIn1 = &aMem[pOp->p1];
   type1 = numericType(pIn1);
@@ -1515,8 +1515,8 @@ fp_math:
       case OP_Subtract:    rB -= rA;       break;
       case OP_Multiply:    rB *= rA;       break;
       case OP_Divide: {
-        /* (double)0 In case of SQLITE_OMIT_FLOATING_POINT... */
-        if( rA==(double)0 ) goto arithmetic_result_is_null;
+        /* (sqlite_double)0 In case of SQLITE_OMIT_FLOATING_POINT... */
+        if( rA==(sqlite_double)0 ) goto arithmetic_result_is_null;
         rB /= rA;
         break;
       }
@@ -1525,7 +1525,7 @@ fp_math:
         iB = (i64)rB;
         if( iA==0 ) goto arithmetic_result_is_null;
         if( iA==-1 ) iA = 1;
-        rB = (double)(iB % iA);
+        rB = (sqlite_double)(iB % iA);
         break;
       }
     }
@@ -2293,7 +2293,7 @@ case OP_IfNot: {            /* jump, in1 */
 #ifdef SQLITE_OMIT_FLOATING_POINT
     c = sqlite3VdbeIntValue(pIn1)!=0;
 #else
-    c = sqlite3VdbeRealValue(pIn1)!=0.0;
+    c = sqlite3VdbeRealValue(pIn1)!=LITDBL(0.0);
 #endif
     if( pOp->opcode==OP_IfNot ) c = !c;
   }
@@ -3738,7 +3738,7 @@ case OP_SeekGT: {       /* jump, in3 */
       **        (x >  4.9)    ->     (x >= 5)
       **        (x <= 4.9)    ->     (x <  5)
       */
-      if( pIn3->u.r<(double)iKey ){
+      if( pIn3->u.r<(sqlite_double)iKey ){
         assert( OP_SeekGE==(OP_SeekGT-1) );
         assert( OP_SeekLT==(OP_SeekLE-1) );
         assert( (OP_SeekLE & 0x0001)==(OP_SeekGT & 0x0001) );
@@ -3747,7 +3747,7 @@ case OP_SeekGT: {       /* jump, in3 */
 
       /* If the approximation iKey is smaller than the actual real search
       ** term, substitute <= for < and > for >=.  */
-      else if( pIn3->u.r>(double)iKey ){
+      else if( pIn3->u.r>(sqlite_double)iKey ){
         assert( OP_SeekLE==(OP_SeekLT+1) );
         assert( OP_SeekGT==(OP_SeekGE+1) );
         assert( (OP_SeekLT & 0x0001)==(OP_SeekGE & 0x0001) );

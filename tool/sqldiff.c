@@ -380,7 +380,7 @@ static char **columnNames(
 static void printQuoted(FILE *out, sqlite3_value *X){
   switch( sqlite3_value_type(X) ){
     case SQLITE_FLOAT: {
-      sqlite_double r1;
+      double r1;
       char zBuf[50];
       r1 = sqlite3_value_double(X);
       sqlite3_snprintf(sizeof(zBuf), zBuf, "%!.15g", r1);
@@ -1244,6 +1244,7 @@ static void rbudiff_one_table(const char *zTab, FILE *out){
   Str sql = {0, 0, 0};            /* Query to find differences */
   Str insert = {0, 0, 0};         /* First part of output INSERT statement */
   sqlite3_stmt *pStmt = 0;
+  int nRow = 0;                   /* Total rows in data_xxx table */
 
   /* --rbu mode must use real primary keys. */
   g.bSchemaPK = 1;
@@ -1289,6 +1290,7 @@ static void rbudiff_one_table(const char *zTab, FILE *out){
 
     /* Output the first part of the INSERT statement */
     fprintf(out, "%s", insert.z);
+    nRow++;
 
     if( sqlite3_column_type(pStmt, nCol)==SQLITE_INTEGER ){
       for(i=0; i<=nCol; i++){
@@ -1342,6 +1344,12 @@ static void rbudiff_one_table(const char *zTab, FILE *out){
   }
 
   sqlite3_finalize(pStmt);
+  if( nRow>0 ){
+    Str cnt = {0, 0, 0};
+    strPrintf(&cnt, "INSERT INTO rbu_count VALUES('data_%q', %d);", zTab, nRow);
+    fprintf(out, "%s\n", cnt.z);
+    strFree(&cnt);
+  }
 
   strFree(&ct);
   strFree(&sql);
@@ -1514,7 +1522,7 @@ static void putsVarint(FILE *out, sqlite3_uint64 v){
 static void putValue(FILE *out, sqlite3_value *pVal){
   int iDType = sqlite3_value_type(pVal);
   sqlite3_int64 iX;
-  sqlite_double rX;
+  double rX;
   sqlite3_uint64 uX;
   int j;
 
@@ -1757,8 +1765,10 @@ int main(int argc, char **argv){
   char *zTab = 0;
   FILE *out = stdout;
   void (*xDiff)(const char*,FILE*) = diff_one_table;
+#ifndef SQLITE_OMIT_LOAD_EXTENSION
   int nExt = 0;
   char **azExt = 0;
+#endif
   int useTransaction = 0;
   int neverUseTransaction = 0;
 
@@ -1841,8 +1851,8 @@ int main(int argc, char **argv){
       cmdlineError("error loading %s: %s", azExt[i], zErrMsg);
     }
   }
-#endif
   free(azExt);
+#endif
   zSql = sqlite3_mprintf("ATTACH %Q as aux;", zDb2);
   rc = sqlite3_exec(g.db, zSql, 0, 0, &zErrMsg);
   if( rc || zErrMsg ){
@@ -1854,7 +1864,13 @@ int main(int argc, char **argv){
   }
 
   if( neverUseTransaction ) useTransaction = 0;
-  if( useTransaction ) printf("BEGIN TRANSACTION;\n");
+  if( useTransaction ) fprintf(out, "BEGIN TRANSACTION;\n");
+  if( xDiff==rbudiff_one_table ){
+    fprintf(out, "CREATE TABLE IF NOT EXISTS rbu_count"
+           "(tbl TEXT PRIMARY KEY COLLATE NOCASE, cnt INTEGER) "
+           "WITHOUT ROWID;\n"
+    );
+  }
   if( zTab ){
     xDiff(zTab, out);
   }else{

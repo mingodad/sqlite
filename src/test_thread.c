@@ -289,7 +289,7 @@ static int sqlthread_open(
     int nKey;
     int rc;
     zKey = Tcl_GetStringFromObj(objv[3], &nKey);
-    rc = sqlite3_key(db, zKey, nKey);
+    rc = sqlite3_key_v2(db, zFilename, zKey, nKey);
     if( rc!=SQLITE_OK ){
       char *zErrMsg = sqlite3_mprintf("error %d: %s", rc, sqlite3_errmsg(db));
       sqlite3_close(db);

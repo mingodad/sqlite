@@ -15,19 +15,21 @@
 
 #include "fts5Int.h"
 
-int sqlite3Fts5BufferSize(int *pRc, Fts5Buffer *pBuf, int nByte){
-  int nNew = pBuf->nSpace ? pBuf->nSpace*2 : 64;
-  u8 *pNew;
-  while( nNew<nByte ){
-    nNew = nNew * 2;
-  }
-  pNew = sqlite3_realloc(pBuf->p, nNew);
-  if( pNew==0 ){
-    *pRc = SQLITE_NOMEM;
-    return 1;
-  }else{
-    pBuf->nSpace = nNew;
-    pBuf->p = pNew;
+int sqlite3Fts5BufferSize(int *pRc, Fts5Buffer *pBuf, u32 nByte){
+  if( (u32)pBuf->nSpace<nByte ){
+    u32 nNew = pBuf->nSpace ? pBuf->nSpace : 64;
+    u8 *pNew;
+    while( nNew<nByte ){
+      nNew = nNew * 2;
+    }
+    pNew = sqlite3_realloc(pBuf->p, nNew);
+    if( pNew==0 ){
+      *pRc = SQLITE_NOMEM;
+      return 1;
+    }else{
+      pBuf->nSpace = nNew;
+      pBuf->p = pNew;
+    }
   }
   return 0;
 }
@@ -61,10 +63,10 @@ int sqlite3Fts5Get32(const u8 *aBuf){
 void sqlite3Fts5BufferAppendBlob(
   int *pRc,
   Fts5Buffer *pBuf, 
-  int nData, 
+  u32 nData, 
   const u8 *pData
 ){
-  assert( *pRc || nData>=0 );
+  assert_nc( *pRc || nData>=0 );
   if( fts5BufferGrow(pRc, pBuf, nData) ) return;
   memcpy(&pBuf->p[pBuf->n], pData, nData);
   pBuf->n += nData;
@@ -208,23 +210,36 @@ int sqlite3Fts5PoslistReaderInit(
   return pIter->bEof;
 }
 
+/*
+** Append position iPos to the position list being accumulated in buffer
+** pBuf, which must be already be large enough to hold the new data.
+** The previous position written to this list is *piPrev. *piPrev is set
+** to iPos before returning.
+*/
+void sqlite3Fts5PoslistSafeAppend(
+  Fts5Buffer *pBuf, 
+  i64 *piPrev, 
+  i64 iPos
+){
+  static const i64 colmask = ((i64)(0x7FFFFFFF)) << 32;
+  if( (iPos & colmask) != (*piPrev & colmask) ){
+    pBuf->p[pBuf->n++] = 1;
+    pBuf->n += sqlite3Fts5PutVarint(&pBuf->p[pBuf->n], (iPos>>32));
+    *piPrev = (iPos & colmask);
+  }
+  pBuf->n += sqlite3Fts5PutVarint(&pBuf->p[pBuf->n], (iPos-*piPrev)+2);
+  *piPrev = iPos;
+}
+
 int sqlite3Fts5PoslistWriterAppend(
   Fts5Buffer *pBuf, 
   Fts5PoslistWriter *pWriter,
   i64 iPos
 ){
-  static const i64 colmask = ((i64)(0x7FFFFFFF)) << 32;
-  int rc = SQLITE_OK;
-  if( 0==fts5BufferGrow(&rc, pBuf, 5+5+5) ){
-    if( (iPos & colmask) != (pWriter->iPrev & colmask) ){
-      pBuf->p[pBuf->n++] = 1;
-      pBuf->n += sqlite3Fts5PutVarint(&pBuf->p[pBuf->n], (iPos>>32));
-      pWriter->iPrev = (iPos & colmask);
-    }
-    pBuf->n += sqlite3Fts5PutVarint(&pBuf->p[pBuf->n], (iPos-pWriter->iPrev)+2);
-    pWriter->iPrev = iPos;
-  }
-  return rc;
+  int rc = 0;   /* Initialized only to suppress erroneous warning from Clang */
+  if( fts5BufferGrow(&rc, pBuf, 5+5+5) ) return rc;
+  sqlite3Fts5PoslistSafeAppend(pBuf, &pWriter->iPrev, iPos);
+  return SQLITE_OK;
 }
 
 void *sqlite3Fts5MallocZero(int *pRc, int nByte){
@@ -322,21 +337,24 @@ int sqlite3Fts5TermsetAdd(
   *pbPresent = 0;
   if( p ){
     int i;
-    int hash;
+    u32 hash = 13;
     Fts5TermsetEntry *pEntry;
 
-    /* Calculate a hash value for this term */
-    hash = 104 + iIdx;
-    for(i=0; i<nTerm; i++){
-      hash += (hash << 3) + (int)pTerm[i];
+    /* Calculate a hash value for this term. This is the same hash checksum
+    ** used by the fts5_hash.c module. This is not important for correct
+    ** operation of the module, but is necessary to ensure that some tests
+    ** designed to produce hash table collisions really do work.  */
+    for(i=nTerm-1; i>=0; i--){
+      hash = (hash << 3) ^ hash ^ pTerm[i];
     }
+    hash = (hash << 3) ^ hash ^ iIdx;
     hash = hash % ArraySize(p->apHash);
 
     for(pEntry=p->apHash[hash]; pEntry; pEntry=pEntry->pNext){
       if( pEntry->iIdx==iIdx 
           && pEntry->nTerm==nTerm 
           && memcmp(pEntry->pTerm, pTerm, nTerm)==0 
-        ){
+      ){
         *pbPresent = 1;
         break;
       }
@@ -360,7 +378,7 @@ int sqlite3Fts5TermsetAdd(
 
 void sqlite3Fts5TermsetFree(Fts5Termset *p){
   if( p ){
-    int i;
+    u32 i;
     for(i=0; i<ArraySize(p->apHash); i++){
       Fts5TermsetEntry *pEntry = p->apHash[i];
       while( pEntry ){
@@ -372,6 +390,3 @@ void sqlite3Fts5TermsetFree(Fts5Termset *p){
     sqlite3_free(p);
   }
 }
-
-
-

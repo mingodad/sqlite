@@ -3862,6 +3862,7 @@ void sqlite3Fts3UnicodeTokenizer(sqlite3_tokenizer_module const**ppModule);
 #ifdef SQLITE_ENABLE_ICU
 void sqlite3Fts3IcuTokenizerModule(sqlite3_tokenizer_module const**ppModule);
 #endif
+void sqlite3Fts3SubLatinTokenizerModule(sqlite3_tokenizer_module const**ppModule);
 
 /*
 ** Initialize the fts3 extension. If this extension is built as part
@@ -3874,6 +3875,7 @@ int sqlite3Fts3Init(sqlite3 *db){
   Fts3Hash *pHash = 0;
   const sqlite3_tokenizer_module *pSimple = 0;
   const sqlite3_tokenizer_module *pPorter = 0;
+  const sqlite3_tokenizer_module *pSubLatin = 0;
 #ifndef SQLITE_DISABLE_FTS3_UNICODE
   const sqlite3_tokenizer_module *pUnicode = 0;
 #endif
@@ -3897,6 +3899,7 @@ int sqlite3Fts3Init(sqlite3 *db){
 
   sqlite3Fts3SimpleTokenizerModule(&pSimple);
   sqlite3Fts3PorterTokenizerModule(&pPorter);
+  sqlite3Fts3SubLatinTokenizerModule(&pSubLatin);
 
   /* Allocate and initialize the hash-table used to store tokenizers. */
   pHash = sqlite3_malloc(sizeof(Fts3Hash));
@@ -3910,7 +3913,7 @@ int sqlite3Fts3Init(sqlite3 *db){
   if( rc==SQLITE_OK ){
     if( sqlite3Fts3HashInsert(pHash, "simple", 7, (void *)pSimple)
      || sqlite3Fts3HashInsert(pHash, "porter", 7, (void *)pPorter) 
-
+     || sqlite3Fts3HashInsert(pHash, "sublatin", 9, (void *)pSubLatin)
 #ifndef SQLITE_DISABLE_FTS3_UNICODE
      || sqlite3Fts3HashInsert(pHash, "unicode61", 10, (void *)pUnicode) 
 #endif

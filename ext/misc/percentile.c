@@ -123,7 +123,7 @@ static void percentStep(sqlite3_context *pCtx, int argc, sqlite3_value **argv){
   ** from any prior row, per Requirement (2). */
   if( p->rPct==LITDBL(0.0) ){
     p->rPct = rPct+LITDBL(1.0);
-  }else if( !sameValue(p->rPct,rPct+LITDBL(1.0)) ){
+  }else if( !sameValue(p->rPct,rPct+1.0) ){
     sqlite3_result_error(pCtx, "2nd argument to percentile() is not the "
                                "same for all input rows", -1);
     return;
@@ -189,7 +189,7 @@ static void percentFinal(sqlite3_context *pCtx){
   if( p->a==0 ) return;
   if( p->nUsed ){
     qsort(p->a, p->nUsed, sizeof(sqlite_double), doubleCmp);
-    ix = (p->rPct-LITDBL(1.0))*(p->nUsed-1)*LITDBL(0.01);
+    ix = (p->rPct-1.0)*(p->nUsed-1)*LITDBL(0.01);
     i1 = (unsigned)ix;
     i2 = ix==(sqlite_double)i1 || i1==p->nUsed-1 ? i1 : i1+1;
     v1 = p->a[i1];

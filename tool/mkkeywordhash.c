@@ -144,6 +144,17 @@ struct Keyword {
 #  define CTE        0x00040000
 #endif
 
+#ifdef SQLITE_OMIT_PREPARED
+#  define PREPARED       0
+#else
+#  define PREPARED       0x00080000
+#endif
+#ifdef SQLITE_WITH_PROCEDURAL_LANGUAGE
+#  define PLANG        0x00100000
+#else
+#  define PLANG        0
+#endif
+
 /*
 ** These are the keywords
 */
@@ -164,6 +175,7 @@ static Keyword aKeywordTable[] = {
   { "BEGIN",            "TK_BEGIN",        ALWAYS                 },
   { "BETWEEN",          "TK_BETWEEN",      ALWAYS                 },
   { "BY",               "TK_BY",           ALWAYS                 },
+  { "CALL",          "TK_CALL",      PLANG                   },
   { "CASCADE",          "TK_CASCADE",      FKEY                   },
   { "CASE",             "TK_CASE",         ALWAYS                 },
   { "CAST",             "TK_CAST",         CAST                   },
@@ -179,6 +191,8 @@ static Keyword aKeywordTable[] = {
   { "CURRENT_TIME",     "TK_CTIME_KW",     ALWAYS                 },
   { "CURRENT_TIMESTAMP","TK_CTIME_KW",     ALWAYS                 },
   { "DATABASE",         "TK_DATABASE",     ATTACH                 },
+  { "DEALLOCATE",          "TK_DEALLOCATE",      PREPARED                 },
+  { "DECLARE",          "TK_DECLARE",      PLANG                 },
   { "DEFAULT",          "TK_DEFAULT",      ALWAYS                 },
   { "DEFERRED",         "TK_DEFERRED",     ALWAYS                 },
   { "DEFERRABLE",       "TK_DEFERRABLE",   FKEY                   },
@@ -190,10 +204,14 @@ static Keyword aKeywordTable[] = {
   { "END",              "TK_END",          ALWAYS                 },
   { "EACH",             "TK_EACH",         TRIGGER                },
   { "ELSE",             "TK_ELSE",         ALWAYS                 },
+  { "ELSIF",             "TK_ELSIF",         PLANG                 },
   { "ESCAPE",           "TK_ESCAPE",       ALWAYS                 },
   { "EXCEPT",           "TK_EXCEPT",       COMPOUND               },
   { "EXCLUSIVE",        "TK_EXCLUSIVE",    ALWAYS                 },
+  { "EXEC",        "TK_EXEC",    PLANG                 },
+  { "EXECUTE",        "TK_EXECUTE",    PREPARED                 },
   { "EXISTS",           "TK_EXISTS",       ALWAYS                 },
+  { "EXIT",           "TK_EXIT",       PLANG                 },
   { "EXPLAIN",          "TK_EXPLAIN",      EXPLAIN                },
   { "FAIL",             "TK_FAIL",         CONFLICT|TRIGGER       },
   { "FOR",              "TK_FOR",          TRIGGER                },
@@ -222,6 +240,7 @@ static Keyword aKeywordTable[] = {
   { "LEFT",             "TK_JOIN_KW",      ALWAYS                 },
   { "LIKE",             "TK_LIKE_KW",      ALWAYS                 },
   { "LIMIT",            "TK_LIMIT",        ALWAYS                 },
+  { "LOOP",            "TK_LOOP",        PLANG                 },
   { "MATCH",            "TK_MATCH",        ALWAYS                 },
   { "NATURAL",          "TK_JOIN_KW",      ALWAYS                 },
   { "NO",               "TK_NO",           FKEY                   },
@@ -236,7 +255,10 @@ static Keyword aKeywordTable[] = {
   { "OUTER",            "TK_JOIN_KW",      ALWAYS                 },
   { "PLAN",             "TK_PLAN",         EXPLAIN                },
   { "PRAGMA",           "TK_PRAGMA",       PRAGMA                 },
+  { "PREPARE",           "TK_PREPARE",       PREPARED                 },
   { "PRIMARY",          "TK_PRIMARY",      ALWAYS                 },
+  { "PRINT",          "TK_PRINT",      PLANG                 },
+  { "PROCEDURE",          "TK_PROCEDURE",      PLANG                 },
   { "QUERY",            "TK_QUERY",        EXPLAIN                },
   { "RAISE",            "TK_RAISE",        TRIGGER                },
   { "RECURSIVE",        "TK_RECURSIVE",    CTE                    },
@@ -247,11 +269,13 @@ static Keyword aKeywordTable[] = {
   { "RENAME",           "TK_RENAME",       ALTER                  },
   { "REPLACE",          "TK_REPLACE",      CONFLICT               },
   { "RESTRICT",         "TK_RESTRICT",     FKEY                   },
+  { "RETURN",         "TK_RETURN",     PLANG                   },
   { "RIGHT",            "TK_JOIN_KW",      ALWAYS                 },
   { "ROLLBACK",         "TK_ROLLBACK",     ALWAYS                 },
   { "ROW",              "TK_ROW",          TRIGGER                },
   { "SAVEPOINT",        "TK_SAVEPOINT",    ALWAYS                 },
   { "SELECT",           "TK_SELECT",       ALWAYS                 },
+  { "XSELECT",          "TK_XSELECT",      ALWAYS                 },
   { "SET",              "TK_SET",          ALWAYS                 },
   { "TABLE",            "TK_TABLE",        ALWAYS                 },
   { "TEMP",             "TK_TEMP",         ALWAYS                 },
@@ -272,12 +296,16 @@ static Keyword aKeywordTable[] = {
   { "WITHOUT",          "TK_WITHOUT",      ALWAYS                 },
   { "WHEN",             "TK_WHEN",         ALWAYS                 },
   { "WHERE",            "TK_WHERE",        ALWAYS                 },
+  { "WHILE",            "TK_WHILE",        PLANG                 },
 };
 
 /* Number of keywords */
 static int nKeyword = (sizeof(aKeywordTable)/sizeof(aKeywordTable[0]));
 
-/* Map all alphabetic characters into the same case */
+/* Map all alphabetic characters into lower-case for hashing.  This is
+** only valid for alphabetics.  In particular it does not work for '_'
+** and so the hash cannot be on a keyword position that might be an '_'.
+*/
 #define charMap(X)   (0x20|(X))
 
 /*
@@ -565,20 +593,28 @@ int main(int argc, char **argv){
   }
   printf("%s  };\n", j==0 ? "" : "\n");
 
-  printf("  int h, i;\n");
+  printf("  int i, j;\n");
+  printf("  const char *zKW;\n");
   printf("  if( n>=2 ){\n");
-  printf("    h = ((charMap(z[0])*4) ^ (charMap(z[n-1])*3) ^ n) %% %d;\n",
+  printf("    i = ((charMap(z[0])*4) ^ (charMap(z[n-1])*3) ^ n) %% %d;\n",
           bestSize);
-  printf("    for(i=((int)aHash[h])-1; i>=0; i=((int)aNext[i])-1){\n");
-  printf("      if( aLen[i]==n &&"
-                     " sqlite3StrNICmp(&zText[aOffset[i]],z,n)==0 ){\n");
+  printf("    for(i=((int)aHash[i])-1; i>=0; i=((int)aNext[i])-1){\n");
+  printf("      if( aLen[i]!=n ) continue;\n");
+  printf("      j = 0;\n");
+  printf("      zKW = &zText[aOffset[i]];\n");
+  printf("#ifdef SQLITE_ASCII\n");
+  printf("      while( j<n && (z[j]&~0x20)==zKW[j] ){ j++; }\n");
+  printf("#endif\n");
+  printf("#ifdef SQLITE_EBCDIC\n");
+  printf("      while( j<n && toupper(z[j])==zKW[j] ){ j++; }\n");
+  printf("#endif\n");
+  printf("      if( j<n ) continue;\n");
   for(i=0; i<nKeyword; i++){
-    printf("        testcase( i==%d ); /* %s */\n",
+    printf("      testcase( i==%d ); /* %s */\n",
            i, aKeywordTable[i].zOrigName);
   }
-  printf("        *pType = aCode[i];\n");
-  printf("        break;\n");
-  printf("      }\n");
+  printf("      *pType = aCode[i];\n");
+  printf("      break;\n");
   printf("    }\n");
   printf("  }\n");
   printf("  return n;\n");

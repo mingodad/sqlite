@@ -112,6 +112,9 @@ foreach hdr {
    pragma.h
    rtree.h
    sqlite3.h
+   rijndael.h
+   codec.h
+   codecext.h
    sqlite3ext.h
    sqlite3rbu.h
    sqliteicu.h
@@ -122,6 +125,9 @@ foreach hdr {
    vxworks.h
    wal.h
    whereInt.h
+   sublatin.h
+   sqlite_sublatin.h
+   sqlite_pl.h
 } {
   set available_hdr($hdr) 1
 }
@@ -323,7 +329,6 @@ foreach file {
    vdbe.c
    vdbeblob.c
    vdbesort.c
-   journal.c
    memjournal.c
 
    walker.c
@@ -361,6 +366,11 @@ foreach file {
    main.c
    notify.c
 
+   sublatin.c
+   sqlite_sublatin.c
+   strnatcmp.c
+   sqlite_pl.c
+
    fts3.c
    fts3_aux.c
    fts3_expr.c
@@ -371,6 +381,7 @@ foreach file {
    fts3_tokenize_vtab.c
    fts3_write.c
    fts3_snippet.c
+   fts3_tokenizer_sublatin.c
    fts3_unicode.c
    fts3_unicode2.c
 
@@ -381,6 +392,16 @@ foreach file {
    dbstat.c
    json1.c
    fts5.c
+   sqlite3secure.c
+   rijndael.c
+   codec.c
+   codecext.c
+   regexp.c
+   closure.c
+   totype.c
+   series.c
+   eval.c
+   extension-functions.c
 } {
   copy_file tsrc/$file
 }

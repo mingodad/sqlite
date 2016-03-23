@@ -61,7 +61,7 @@ LIBOBJ+= vdbe.o parse.o \
          fts3_tokenize_vtab.o \
 	 fts3_unicode.o fts3_unicode2.o \
          fts3_write.o fts5.o func.o global.o hash.o \
-         icu.o insert.o journal.o json1.o legacy.o loadext.o \
+         icu.o insert.o json1.o legacy.o loadext.o \
          main.o malloc.o mem0.o mem1.o mem2.o mem3.o mem5.o \
          memjournal.o \
          mutex.o mutex_noop.o mutex_unix.o mutex_w32.o \
@@ -72,7 +72,10 @@ LIBOBJ+= vdbe.o parse.o \
          update.o userauth.o util.o vacuum.o \
          vdbeapi.o vdbeaux.o vdbeblob.o vdbemem.o vdbesort.o \
 	 vdbetrace.o wal.o walker.o where.o wherecode.o whereexpr.o \
-         utf.o vtab.o
+         utf.o vtab.o \
+	sqlite3secure.lo fts3_tokenizer_sublatin.lo sublatin.lo \
+	sqlite_sublatin.lo extension-functions.lo strnatcmp.lo \
+	sqlite_pl.lo
 
 
 # All of the source code files.
@@ -104,7 +107,6 @@ SRC = \
   $(TOP)/src/hash.h \
   $(TOP)/src/hwtime.h \
   $(TOP)/src/insert.c \
-  $(TOP)/src/journal.c \
   $(TOP)/src/legacy.c \
   $(TOP)/src/loadext.c \
   $(TOP)/src/main.c \
@@ -224,6 +226,30 @@ SRC += \
   $(TOP)/ext/rtree/rtree.h \
   $(TOP)/ext/rtree/rtree.c
 SRC += \
+  $(TOP)/src/sqlite3secure.c \
+  $(TOP)/src/rijndael.c \
+  $(TOP)/src/rijndael.h \
+  $(TOP)/src/codec.c \
+  $(TOP)/src/codec.h \
+  $(TOP)/src/codecext.c \
+  $(TOP)/src/codecext.h \
+  $(TOP)/src/strnatcmp.c \
+  $(TOP)/src/sublatin.c \
+  $(TOP)/src/sublatin.h \
+  $(TOP)/src/sqlite_sublatin.c \
+  $(TOP)/src/sqlite_sublatin.h \
+  $(TOP)/src/sqlite_pl.c \
+  $(TOP)/src/sqlite_pl.h \
+  $(TOP)/ext/fts3/fts3_tokenizer_sublatin.c \
+  $(TOP)/ext/dad/extension-functions.c \
+  $(TOP)/ext/misc/regexp.c \
+  $(TOP)/ext/misc/closure.c \
+  $(TOP)/ext/misc/json1.c \
+  $(TOP)/ext/misc/totype.c \
+  $(TOP)/ext/misc/series.c \
+  $(TOP)/ext/misc/eval.c
+
+SRC += \
   $(TOP)/ext/userauth/userauth.c \
   $(TOP)/ext/userauth/sqlite3userauth.h 
 SRC += \
@@ -285,6 +311,7 @@ TESTSRC = \
   $(TOP)/src/test_autoext.c \
   $(TOP)/src/test_async.c \
   $(TOP)/src/test_backup.c \
+  $(TOP)/src/test_bestindex.c \
   $(TOP)/src/test_blob.c \
   $(TOP)/src/test_btree.c \
   $(TOP)/src/test_config.c \
@@ -334,8 +361,7 @@ TESTSRC += \
   $(TOP)/ext/misc/vfslog.c \
   $(TOP)/ext/fts5/fts5_tcl.c \
   $(TOP)/ext/fts5/fts5_test_mi.c \
-  $(TOP)/ext/fts5/fts5_test_tok.c \
-  $(FTS5_SRC)
+  $(TOP)/ext/fts5/fts5_test_tok.c 
 
 
 #TESTSRC += $(TOP)/ext/fts2/fts2_tokenizer.c
@@ -481,6 +507,12 @@ sqldiff$(EXE):	$(TOP)/tool/sqldiff.c sqlite3.c sqlite3.h
 	$(TCCX) -o sqldiff$(EXE) -DSQLITE_THREADSAFE=0 \
 		$(TOP)/tool/sqldiff.c sqlite3.c $(TLIBS) $(THREADLIB)
 
+srcck1$(EXE):	$(TOP)/tool/srcck1.c
+	$(BCC) -o srcck1$(EXE) $(TOP)/tool/srcck1.c
+
+sourcetest:	srcck1$(EXE) sqlite3.c
+	./srcck1 sqlite3.c
+
 fuzzershell$(EXE):	$(TOP)/tool/fuzzershell.c sqlite3.c sqlite3.h
 	$(TCCX) -o fuzzershell$(EXE) -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION \
 	  $(FUZZERSHELL_OPT) $(TOP)/tool/fuzzershell.c sqlite3.c \
@@ -495,10 +527,9 @@ mptester$(EXE):	sqlite3.c $(TOP)/mptest/mptest.c
 	$(TCCX) -o $@ -I. $(TOP)/mptest/mptest.c sqlite3.c \
 		$(TLIBS) $(THREADLIB)
 
-MPTEST1=./mptester$(EXE) mptest.db $(TOP)/mptest/crash01.test --repeat 20
-MPTEST2=./mptester$(EXE) mptest.db $(TOP)/mptest/multiwrite01.test --repeat 20
+MPTEST1=./mptester$(EXE) mptest1.db $(TOP)/mptest/crash01.test --repeat 20
+MPTEST2=./mptester$(EXE) mptest2.db $(TOP)/mptest/multiwrite01.test --repeat 20
 mptest:	mptester$(EXE)
-	rm -f mptest.db
 	$(MPTEST1) --journalmode DELETE
 	$(MPTEST2) --journalmode WAL
 	$(MPTEST1) --journalmode WAL
@@ -696,6 +727,25 @@ fts5.c: $(FTS5_SRC) $(FTS5_HDR)
 userauth.o:	$(TOP)/ext/userauth/userauth.c $(HDR) $(EXTHDR)
 	$(TCCX) -DSQLITE_CORE -c $(TOP)/ext/userauth/userauth.c
 
+#dad extensions
+sqlite3secure.lo:	$(TOP)/src/sqlite3secure.c $(HDR) $(EXTHDR)
+	$(LTCOMPILE) -DSQLITE_CORE -c $(TOP)/src/sqlite3secure.c
+
+fts3_tokenizer_sublatin.lo:	$(TOP)/ext/fts3/fts3_tokenizer_sublatin.c $(HDR) $(EXTHDR)
+	$(LTCOMPILE) -DSQLITE_CORE -c $(TOP)/ext/fts3/fts3_tokenizer_sublatin.c
+
+sublatin.lo:	$(TOP)/src/sublatin.c $(HDR)
+	$(LTCOMPILE) $(TEMP_STORE) -c $(TOP)/src/sublatin.c
+	
+sqlite_sublatin.lo:	$(TOP)/src/sqlite_sublatin.c $(HDR)
+	$(LTCOMPILE) $(TEMP_STORE) -c $(TOP)/src/sqlite_sublatin.c
+		
+sqlite_pl.lo:	$(TOP)/src/sqlite_pl.c $(HDR)
+	$(LTCOMPILE) $(TEMP_STORE) -c $(TOP)/src/sqlite_pl.c
+		
+extension-functions.lo:	$(TOP)/ext/dad/extension-functions.c $(HDR) $(EXTHDR)
+	$(LTCOMPILE) -DSQLITE_CORE -c $(TOP)/ext/dad/extension-functions.c
+
 sqlite3rbu.o:	$(TOP)/ext/rbu/sqlite3rbu.c $(HDR) $(EXTHDR)
 	$(TCCX) -DSQLITE_CORE -c $(TOP)/ext/rbu/sqlite3rbu.c
 
@@ -721,7 +771,9 @@ sqlite3_analyzer$(EXE): sqlite3_analyzer.c
 # Rules to build the 'testfixture' application.
 #
 TESTFIXTURE_FLAGS  = -DSQLITE_TEST=1 -DSQLITE_CRASH_TEST=1
-TESTFIXTURE_FLAGS += -DSQLITE_SERVER=1 -DSQLITE_PRIVATE="" -DSQLITE_CORE 
+TESTFIXTURE_FLAGS += -DSQLITE_SERVER=1 -DSQLITE_PRIVATE="" -DSQLITE_CORE
+TESTFIXTURE_FLAGS += -DSQLITE_SERIES_CONSTRAINT_VERIFY=1
+TESTFIXTURE_FLAGS += -DSQLITE_DEFAULT_PAGE_SIZE=1024
 
 testfixture$(EXE): $(TESTSRC2) libsqlite3.a $(TESTSRC) $(TOP)/src/tclsqlite.c
 	$(TCCX) $(TCL_FLAGS) -DTCLSH=1 $(TESTFIXTURE_FLAGS)                  \
@@ -769,7 +821,7 @@ quicktest:	./testfixture$(EXE)
 # The default test case.  Runs most of the faster standard TCL tests,
 # and fuzz tests, and sqlite3_analyzer and sqldiff tests.
 #
-test:	$(TESTPROGS) fastfuzztest
+test:	$(TESTPROGS) sourcetest fastfuzztest
 	./testfixture$(EXE) $(TOP)/test/veryquick.test $(TESTOPTS)
 
 # Run a test using valgrind.  This can take a really long time
@@ -858,10 +910,15 @@ loadfts: $(TOP)/tool/loadfts.c libsqlite3.a
 checksymbols: sqlite3.o
 	nm -g --defined-only sqlite3.o | grep -v " sqlite3_" ; test $$? -ne 0
 
-# Build the amalgamation-autoconf package.
+# Build the amalgamation-autoconf package.  The amalamgation-tarball target builds
+# a tarball named for the version number.  Ex:  sqlite-autoconf-3110000.tar.gz.
+# The snapshot-tarball target builds a tarball named by the SHA1 hash
 #
 amalgamation-tarball: sqlite3.c
-	TOP=$(TOP) sh $(TOP)/tool/mkautoconfamal.sh
+	TOP=$(TOP) sh $(TOP)/tool/mkautoconfamal.sh --normal
+
+snapshot-tarball: sqlite3.c
+	TOP=$(TOP) sh $(TOP)/tool/mkautoconfamal.sh --snapshot
 
 
 # Standard install and cleanup targets
@@ -893,6 +950,8 @@ clean:
 	rm -f showwal showwal.exe
 	rm -f speedtest1 speedtest1.exe
 	rm -f wordcount wordcount.exe
+	rm -f rbu rbu.exe
+	rm -f srcck1 srcck1.exe
 	rm -f sqlite3.c sqlite3-*.c fts?amal.c tclsqlite3.c
 	rm -f sqlite3rc.h
 	rm -f shell.c sqlite3ext.h

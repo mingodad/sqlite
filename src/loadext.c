@@ -94,6 +94,7 @@
 #ifdef SQLITE_OMIT_TRACE
 # define sqlite3_profile       0
 # define sqlite3_trace         0
+# define sqlite3_trace_v2         0
 #endif
 
 #ifdef SQLITE_OMIT_GET_TABLE
@@ -238,6 +239,7 @@ static const sqlite3_api_routines sqlite3Apis = {
 #endif
   sqlite3_total_changes,
   sqlite3_trace,
+  sqlite3_trace_v2,
 #ifndef SQLITE_OMIT_DEPRECATED
   sqlite3_transfer_bindings,
 #else
@@ -414,7 +416,9 @@ static const sqlite3_api_routines sqlite3Apis = {
   /* Version 3.10.0 and later */
   sqlite3_status64,
   sqlite3_strlike,
-  sqlite3_db_cacheflush
+  sqlite3_db_cacheflush,
+  /* Version 3.12.0 and later */
+  sqlite3_system_errno
 };
 
 /*
@@ -478,7 +482,7 @@ static int sqlite3LoadExtension(
 #if SQLITE_OS_UNIX || SQLITE_OS_WIN
   for(ii=0; ii<ArraySize(azEndings) && handle==0; ii++){
     char *zAltFile = sqlite3_mprintf("%s.%s", zFile, azEndings[ii]);
-    if( zAltFile==0 ) return SQLITE_NOMEM;
+    if( zAltFile==0 ) return SQLITE_NOMEM_BKPT;
     handle = sqlite3OsDlOpen(pVfs, zAltFile);
     sqlite3_free(zAltFile);
   }
@@ -514,7 +518,7 @@ static int sqlite3LoadExtension(
     zAltEntry = sqlite3_malloc64(ncFile+30);
     if( zAltEntry==0 ){
       sqlite3OsDlClose(pVfs, handle);
-      return SQLITE_NOMEM;
+      return SQLITE_NOMEM_BKPT;
     }
     memcpy(zAltEntry, "sqlite3_", 8);
     for(iFile=ncFile-1; iFile>=0 && zFile[iFile]!='/'; iFile--){}
@@ -557,7 +561,7 @@ static int sqlite3LoadExtension(
   /* Append the new shared library handle to the db->aExtension array. */
   aHandle = sqlite3DbMallocZero(db, sizeof(handle)*(db->nExtension+1));
   if( aHandle==0 ){
-    return SQLITE_NOMEM;
+    return SQLITE_NOMEM_BKPT;
   }
   if( db->nExtension>0 ){
     memcpy(aHandle, db->aExtension, sizeof(handle)*db->nExtension);
@@ -679,7 +683,7 @@ int sqlite3_auto_extension(void (*xInit)(void)){
       void (**aNew)(void);
       aNew = sqlite3_realloc64(wsdAutoext.aExt, nByte);
       if( aNew==0 ){
-        rc = SQLITE_NOMEM;
+        rc = SQLITE_NOMEM_BKPT;
       }else{
         wsdAutoext.aExt = aNew;
         wsdAutoext.aExt[wsdAutoext.nExt] = xInit;

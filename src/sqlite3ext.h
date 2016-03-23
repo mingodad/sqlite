@@ -143,6 +143,7 @@ struct sqlite3_api_routines {
   void  (*thread_cleanup)(void);
   int  (*total_changes)(sqlite3*);
   void * (*trace)(sqlite3*,void(*xTrace)(void*,const char*),void*);
+  void * (*trace_v2)(sqlite3*,void(*xTrace)(void*,const char*),void*,int);
   int  (*transfer_bindings)(sqlite3_stmt*,sqlite3_stmt*);
   void * (*update_hook)(sqlite3*,void(*)(void*,int ,char const*,char const*,
                                          sqlite_int64),void*);
@@ -279,6 +280,8 @@ struct sqlite3_api_routines {
   int (*status64)(int,sqlite3_int64*,sqlite3_int64*,int);
   int (*strlike)(const char*,const char*,unsigned int);
   int (*db_cacheflush)(sqlite3*);
+  /* Version 3.12.0 and later */
+  int (*system_errno)(sqlite3*);
 };
 
 /*
@@ -401,6 +404,7 @@ struct sqlite3_api_routines {
 #define sqlite3_thread_cleanup         sqlite3_api->thread_cleanup
 #define sqlite3_total_changes          sqlite3_api->total_changes
 #define sqlite3_trace                  sqlite3_api->trace
+#define sqlite3_trace_v2               sqlite3_api->trace_v2
 #ifndef SQLITE_OMIT_DEPRECATED
 #define sqlite3_transfer_bindings      sqlite3_api->transfer_bindings
 #endif
@@ -522,6 +526,8 @@ struct sqlite3_api_routines {
 #define sqlite3_status64               sqlite3_api->status64
 #define sqlite3_strlike                sqlite3_api->strlike
 #define sqlite3_db_cacheflush          sqlite3_api->db_cacheflush
+/* Version 3.12.0 and later */
+#define sqlite3_system_errno           sqlite3_api->system_errno
 #endif /* !defined(SQLITE_CORE) && !defined(SQLITE_OMIT_LOAD_EXTENSION) */
 
 #if !defined(SQLITE_CORE) && !defined(SQLITE_OMIT_LOAD_EXTENSION)

@@ -52,7 +52,11 @@ static void circle_del(void *p){
 static int circle_geom(
   sqlite3_rtree_geometry *p,
   int nCoord, 
-  sqlite3_rtree_dbl *aCoord,
+#ifdef SQLITE_RTREE_INT_ONLY
+  sqlite3_int64 *aCoord,
+#else
+  sqlite_double  *aCoord, 
+#endif
   int *pRes
 ){
   int i;                          /* Iterator variable */
@@ -388,7 +392,11 @@ static int gHere = 42;
 static int cube_geom(
   sqlite3_rtree_geometry *p,
   int nCoord,
-  sqlite3_rtree_dbl *aCoord,
+#ifdef SQLITE_RTREE_INT_ONLY
+  sqlite3_int64 *aCoord, 
+#else
+  sqlite_double  *aCoord, 
+#endif
   int *piRes
 ){
   Cube *pCube = (Cube *)p->pUser;

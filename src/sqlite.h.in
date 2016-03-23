@@ -357,7 +357,7 @@ typedef int (*sqlite3_callback)(void*,int,char**, char**);
 ** from [sqlite3_malloc()] and passed back through the 5th parameter.
 ** To avoid memory leaks, the application should invoke [sqlite3_free()]
 ** on error message strings returned through the 5th parameter of
-** of sqlite3_exec() after the error message string is no longer needed.
+** sqlite3_exec() after the error message string is no longer needed.
 ** ^If the 5th parameter to sqlite3_exec() is not NULL and no errors
 ** occur, then sqlite3_exec() sets the pointer in its 5th parameter to
 ** NULL before returning.
@@ -544,6 +544,8 @@ int sqlite3_exec(
 #define SQLITE_OPEN_SHAREDCACHE      0x00020000  /* Ok for sqlite3_open_v2() */
 #define SQLITE_OPEN_PRIVATECACHE     0x00040000  /* Ok for sqlite3_open_v2() */
 #define SQLITE_OPEN_WAL              0x00080000  /* VFS only */
+#define SQLITE_OPEN_SUBLATIN_LIKE    0x04000000  /* Ok for sqlite3_open_v2() */
+#define SQLITE_OPEN_SUBLATIN_NA_LIKE 0x08000000  /* Ok for sqlite3_open_v2() */
 
 /* Reserved:                         0x00F00000 */
 
@@ -1238,7 +1240,7 @@ struct sqlite3_vfs {
   const char *(*xNextSystemCall)(sqlite3_vfs*, const char *zName);
   /*
   ** The methods above are in versions 1 through 3 of the sqlite_vfs object.
-  ** New fields may be appended in figure versions.  The iVersion
+  ** New fields may be appended in future versions.  The iVersion
   ** value will increment whenever this happens. 
   */
 };
@@ -1830,6 +1832,20 @@ struct sqlite3_mem_methods {
 ** is enabled (using the [PRAGMA threads] command) and the amount of content
 ** to be sorted exceeds the page size times the minimum of the
 ** [PRAGMA cache_size] setting and this value.
+**
+** [[SQLITE_CONFIG_STMTJRNL_SPILL]]
+** <dt>SQLITE_CONFIG_STMTJRNL_SPILL
+** <dd>^The SQLITE_CONFIG_STMTJRNL_SPILL option takes a single parameter which
+** becomes the [statement journal] spill-to-disk threshold.  
+** [Statement journals] are held in memory until their size (in bytes)
+** exceeds this threshold, at which point they are written to disk.
+** Or if the threshold is -1, statement journals are always held
+** exclusively in memory.
+** Since many statement journals never become large, setting the spill
+** threshold to a value such as 64KiB can greatly reduce the amount of
+** I/O required to support statement rollback.
+** The default value for this setting is controlled by the
+** [SQLITE_STMTJRNL_SPILL] compile-time option.
 ** </dl>
 */
 #define SQLITE_CONFIG_SINGLETHREAD  1  /* nil */
@@ -1857,6 +1873,7 @@ struct sqlite3_mem_methods {
 #define SQLITE_CONFIG_WIN32_HEAPSIZE      23  /* int nByte */
 #define SQLITE_CONFIG_PCACHE_HDRSZ        24  /* int *psz */
 #define SQLITE_CONFIG_PMASZ               25  /* unsigned int szPma */
+#define SQLITE_CONFIG_STMTJRNL_SPILL      26  /* int nByte */
 
 /*
 ** CAPI3REF: Database Connection Configuration Options
@@ -1914,11 +1931,25 @@ struct sqlite3_mem_methods {
 ** following this call.  The second parameter may be a NULL pointer, in
 ** which case the trigger setting is not reported back. </dd>
 **
+** <dt>SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER</dt>
+** <dd> ^This option is used to enable or disable the two-argument
+** version of the [fts3_tokenizer()] function which is part of the
+** [FTS3] full-text search engine extension.
+** There should be two additional arguments.
+** The first argument is an integer which is 0 to disable fts3_tokenizer() or
+** positive to enable fts3_tokenizer() or negative to leave the setting
+** unchanged.
+** The second parameter is a pointer to an integer into which
+** is written 0 or 1 to indicate whether fts3_tokenizer is disabled or enabled
+** following this call.  The second parameter may be a NULL pointer, in
+** which case the new setting is not reported back. </dd>
+**
 ** </dl>
 */
-#define SQLITE_DBCONFIG_LOOKASIDE       1001  /* void* int int */
-#define SQLITE_DBCONFIG_ENABLE_FKEY     1002  /* int int* */
-#define SQLITE_DBCONFIG_ENABLE_TRIGGER  1003  /* int int* */
+#define SQLITE_DBCONFIG_LOOKASIDE             1001 /* void* int int */
+#define SQLITE_DBCONFIG_ENABLE_FKEY           1002 /* int int* */
+#define SQLITE_DBCONFIG_ENABLE_TRIGGER        1003 /* int int* */
+#define SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER 1004 /* int int* */
 
 
 /*
@@ -2412,6 +2443,22 @@ char *sqlite3_vmprintf(const char*, va_list);
 char *sqlite3_snprintf(int,char*,const char*, ...);
 char *sqlite3_vsnprintf(int,char*,const char*, va_list);
 
+typedef struct sqlite3_str_accum sqlite3_str_accum;
+int sqlite3_str_accum_alloc(sqlite3_str_accum **p, char *zBase, int n, int mx);
+int sqlite3_str_accum_reserve(sqlite3_str_accum *p, int size);
+int sqlite3_str_accum_size(sqlite3_str_accum *p);
+int sqlite3_str_accum_resize(sqlite3_str_accum *p, int size, char fill);
+int sqlite3_str_accum_capacity(sqlite3_str_accum *p);
+void sqlite3_str_accum_free(sqlite3_str_accum *p);
+int sqlite3_str_accum_check(sqlite3_str_accum *p);
+void sqlite3_str_accum_reset(sqlite3_str_accum *p, int keepAllocated);
+char *sqlite3_str_accum_finish(sqlite3_str_accum *p, int keepAllocated);
+int sqlite3_str_accum_append(sqlite3_str_accum *p, const char *z, int N);
+char *sqlite3_str_accum_vprintf(sqlite3_str_accum *p, const char *zFormat, va_list ap);
+char *sqlite3_str_accum_printf(sqlite3_str_accum *p, const char *zFormat, ...);
+int sqlite3_isnprintf(char*, int, const char*, ...);
+int sqlite3_ivsnprintf(char*, int, const char*, va_list);
+
 /*
 ** CAPI3REF: Memory Allocation Subsystem
 **
@@ -2743,6 +2790,7 @@ int sqlite3_set_authorizer(
 ** subject to change in future versions of SQLite.
 */
 void *sqlite3_trace(sqlite3*, void(*xTrace)(void*,const char*), void*);
+void *sqlite3_trace_v2(sqlite3*, void(*xTrace)(void*,const char*), void*, int);
 SQLITE_EXPERIMENTAL void *sqlite3_profile(sqlite3*,
    void(*xProfile)(void*,const char*,sqlite3_uint64), void*);
 
@@ -3021,6 +3069,9 @@ int sqlite3_open_v2(
   int flags,              /* Flags */
   const char *zVfs        /* Name of VFS module to use */
 );
+
+void sqlite3_set_db_user_data(sqlite3 *db, void *data);
+void *sqlite3_get_db_user_data(sqlite3 *db);
 
 /*
 ** CAPI3REF: Obtain Values For URI Parameters
@@ -4495,6 +4546,7 @@ void *sqlite3_user_data(sqlite3_context*);
 ** registered the application defined function.
 */
 sqlite3 *sqlite3_context_db_handle(sqlite3_context*);
+void *sqlite3_db_user_data(sqlite3_context *context);
 
 /*
 ** CAPI3REF: Function Auxiliary Data
@@ -4905,6 +4957,10 @@ int sqlite3_rekey_v2(
 void sqlite3_activate_see(
   const char *zPassPhrase        /* Activation phrase */
 );
+
+int sqlite3_CodecAttach(sqlite3* db, int nDb, const void* zKey, int nKey);
+void sqlite3_CodecGetKey(sqlite3* db, int nDb, void** zKey, int* nKey);
+
 #endif
 
 #ifdef SQLITE_ENABLE_CEROD
@@ -5707,7 +5763,7 @@ struct sqlite3_index_info {
   /* Inputs */
   int nConstraint;           /* Number of entries in aConstraint */
   struct sqlite3_index_constraint {
-     int iColumn;              /* Column on left-hand side of constraint */
+     int iColumn;              /* Column constrained.  -1 for ROWID */
      unsigned char op;         /* Constraint operator */
      unsigned char usable;     /* True if this constraint is usable */
      int iTermOffset;          /* Used internally - xBestIndex should ignore */
@@ -7499,7 +7555,7 @@ void sqlite3_log(int iErrCode, const char *zFormat, ...);
 ** previously registered write-ahead log callback. ^Note that the
 ** [sqlite3_wal_autocheckpoint()] interface and the
 ** [wal_autocheckpoint pragma] both invoke [sqlite3_wal_hook()] and will
-** those overwrite any prior [sqlite3_wal_hook()] settings.
+** overwrite any prior [sqlite3_wal_hook()] settings.
 */
 void *sqlite3_wal_hook(
   sqlite3*, 
@@ -7897,6 +7953,18 @@ void sqlite3_stmt_scanstatus_reset(sqlite3_stmt*);
 int sqlite3_db_cacheflush(sqlite3*);
 
 /*
+** CAPI3REF: Low-level system error code
+**
+** ^Attempt to return the underlying operating system error code or error
+** number that caused the most reason I/O error or failure to open a file.
+** The return value is OS-dependent.  For example, on unix systems, after
+** [sqlite3_open_v2()] returns [SQLITE_CANTOPEN], this interface could be
+** called to get back the underlying "errno" that caused the problem, such
+** as ENOSPC, EAUTH, EISDIR, and so forth.  
+*/
+int sqlite3_system_errno(sqlite3*);
+
+/*
 ** CAPI3REF: Database Snapshot
 ** KEYWORDS: {snapshot}
 ** EXPERIMENTAL
@@ -7964,7 +8032,11 @@ SQLITE_EXPERIMENTAL int sqlite3_snapshot_get(
 ** the first operation, apart from other sqlite3_snapshot_open() calls,
 ** following the [BEGIN] that starts a new read transaction.
 ** ^A [snapshot] will fail to open if it has been overwritten by a 
-** [checkpoint].  
+** [checkpoint].
+** ^A [snapshot] will fail to open if the database connection D has not
+** previously completed at least one read operation against the database 
+** file.  (Hint: Run "[PRAGMA application_id]" against a newly opened
+** database connection in order to make it ready to use snapshots.)
 **
 ** The [sqlite3_snapshot_open()] interface is only available when the
 ** SQLITE_ENABLE_SNAPSHOT compile-time option is used.

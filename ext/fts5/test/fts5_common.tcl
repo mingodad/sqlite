@@ -15,6 +15,16 @@ if {![info exists testdir]} {
 }
 source $testdir/tester.tcl
 
+ifcapable !fts5 {
+  proc return_if_no_fts5 {} {
+    finish_test
+    return -code return
+  }
+  return
+} else {
+  proc return_if_no_fts5 {} {}
+}
+
 catch { 
   sqlite3_fts5_may_be_corrupt 0 
   reset_db
@@ -37,7 +47,8 @@ proc fts5_test_poslist2 {cmd} {
     }
   }
 
-  set res
+  #set res
+  sort_poslist $res
 }
 
 proc fts5_test_collist {cmd} {
@@ -146,6 +157,12 @@ proc fts5_aux_test_functions {db} {
   } {
     sqlite3_fts5_create_function $db $f $f
   }
+}
+
+proc fts5_segcount {tbl} {
+  set N 0
+  foreach n [fts5_level_segs $tbl] { incr N $n }
+  set N
 }
 
 proc fts5_level_segs {tbl} {
@@ -510,6 +527,22 @@ proc fts5_poslist_data {expr tbl {order ASC} {aDictVar ""}} {
   set res
 }
 
+proc fts5_collist_data {expr tbl {order ASC} {aDictVar ""}} {
+  set res [list]
+
+  if {$aDictVar!=""} {
+    upvar $aDictVar aDict
+    set dict aDict
+  } else {
+    set dict ""
+  }
+
+  foreach {rowid poslist collist} [fts5_query_data $expr $tbl $order $dict] {
+    lappend res $rowid $collist
+  }
+  set res
+}
+
 #-------------------------------------------------------------------------
 #
 
@@ -560,4 +593,55 @@ proc nearset_rc {aCol args} {
   }
   list
 }
+
+
+#-------------------------------------------------------------------------
+# Code for a simple Tcl tokenizer that supports synonyms at query time.
+#
+proc tclnum_tokenize {mode tflags text} {
+  foreach {w iStart iEnd} [fts5_tokenize_split $text] {
+    sqlite3_fts5_token $w $iStart $iEnd
+    if {$tflags == $mode && [info exists ::tclnum_syn($w)]} {
+      foreach s $::tclnum_syn($w)  { sqlite3_fts5_token -colo $s $iStart $iEnd }
+    }
+  }
+}
+
+proc tclnum_create {args} {
+  set mode query
+  if {[llength $args]} {
+    set mode [lindex $args 0]
+  }
+  if {$mode != "query" && $mode != "document"} { error "bad mode: $mode" }
+  return [list tclnum_tokenize $mode]
+}
+
+proc fts5_tclnum_register {db} {
+  foreach SYNDICT {
+    {zero  0}
+    {one   1 i}
+    {two   2 ii}
+    {three 3 iii}
+    {four  4 iv}
+    {five  5 v}
+    {six   6 vi}
+    {seven 7 vii}
+    {eight 8 viii}
+    {nine  9 ix}
+
+    {a1 a2 a3 a4 a5 a6 a7 a8 a9}
+    {b1 b2 b3 b4 b5 b6 b7 b8 b9}
+    {c1 c2 c3 c4 c5 c6 c7 c8 c9}
+  } {
+    foreach s $SYNDICT {
+      set o [list]
+      foreach x $SYNDICT {if {$x!=$s} {lappend o $x}}
+      set ::tclnum_syn($s) $o
+    }
+  }
+  sqlite3_fts5_create_tokenizer db tclnum tclnum_create
+}
+#
+# End of tokenizer code.
+#-------------------------------------------------------------------------
 

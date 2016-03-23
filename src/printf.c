@@ -171,7 +171,6 @@ static char *getTextArg(PrintfArguments *p){
 */
 void sqlite3VXPrintf(
   StrAccum *pAccum,          /* Accumulate results here */
-  u32 bFlags,                /* SQLITE_PRINTF_* flags */
   const char *fmt,           /* Format string */
   va_list ap                 /* arguments */
 ){
@@ -211,11 +210,11 @@ void sqlite3VXPrintf(
   char buf[etBUFSIZE];       /* Conversion buffer */
 
   bufpt = 0;
-  if( bFlags ){
-    if( (bArgList = (bFlags & SQLITE_PRINTF_SQLFUNC))!=0 ){
+  if( pAccum->printfFlags ){
+    if( (bArgList = (pAccum->printfFlags & SQLITE_PRINTF_SQLFUNC))!=0 ){
       pArgList = va_arg(ap, PrintfArguments*);
     }
-    useIntern = bFlags & SQLITE_PRINTF_INTERNAL;
+    useIntern = pAccum->printfFlags & SQLITE_PRINTF_INTERNAL;
   }else{
     bArgList = useIntern = 0;
   }
@@ -766,9 +765,9 @@ static int sqlite3StrAccumEnlarge(StrAccum *p, int N){
     setStrAccumError(p, STRACCUM_TOOBIG);
     return N;
   }else{
-    char *zOld = p->bMalloced ? p->zText : 0;
+    char *zOld = isMalloced(p) ? p->zText : 0;
     i64 szNew = p->nChar;
-    assert( (p->zText==0 || p->zText==p->zBase)==(p->bMalloced==0) );
+    assert( (p->zText==0 || p->zText==p->zBase)==!isMalloced(p) );
     szNew += N + 1;
     if( szNew+p->nChar<=p->mxAlloc ){
       /* Force exponential buffer size growth as long as it does not overflow,
@@ -789,10 +788,10 @@ static int sqlite3StrAccumEnlarge(StrAccum *p, int N){
     }
     if( zNew ){
       assert( p->zText!=0 || p->nChar==0 );
-      if( !p->bMalloced && p->nChar>0 ) memcpy(zNew, p->zText, p->nChar);
+      if( !isMalloced(p) && p->nChar>0 ) memcpy(zNew, p->zText, p->nChar);
       p->zText = zNew;
       p->nAlloc = sqlite3DbMallocSize(p->db, zNew);
-      p->bMalloced = 1;
+      p->printfFlags |= SQLITE_PRINTF_MALLOCED;
     }else{
       sqlite3StrAccumReset(p);
       setStrAccumError(p, STRACCUM_NOMEM);
@@ -810,7 +809,7 @@ void sqlite3AppendChar(StrAccum *p, int N, char c){
   if( p->nChar+(i64)N >= p->nAlloc && (N = sqlite3StrAccumEnlarge(p, N))<=0 ){
     return;
   }
-  assert( (p->zText==p->zBase)==(p->bMalloced==0) );
+  assert( (p->zText==p->zBase)==!isMalloced(p) );
   while( (N--)>0 ) p->zText[p->nChar++] = c;
 }
 
@@ -828,7 +827,7 @@ static void SQLITE_NOINLINE enlargeAndAppend(StrAccum *p, const char *z, int N){
     memcpy(&p->zText[p->nChar], z, N);
     p->nChar += N;
   }
-  assert( (p->zText==0 || p->zText==p->zBase)==(p->bMalloced==0) );
+  assert( (p->zText==0 || p->zText==p->zBase)==!isMalloced(p) );
 }
 
 /*
@@ -864,13 +863,13 @@ void sqlite3StrAccumAppendAll(StrAccum *p, const char *z){
 */
 char *sqlite3StrAccumFinish(StrAccum *p){
   if( p->zText ){
-    assert( (p->zText==p->zBase)==(p->bMalloced==0) );
+    assert( (p->zText==p->zBase)==!isMalloced(p) );
     p->zText[p->nChar] = 0;
-    if( p->mxAlloc>0 && p->bMalloced==0 ){
+    if( p->mxAlloc>0 && !isMalloced(p) ){
       p->zText = sqlite3DbMallocRaw(p->db, p->nChar+1 );
       if( p->zText ){
         memcpy(p->zText, p->zBase, p->nChar+1);
-        p->bMalloced = 1;
+        p->printfFlags |= SQLITE_PRINTF_MALLOCED;
       }else{
         setStrAccumError(p, STRACCUM_NOMEM);
       }
@@ -883,10 +882,10 @@ char *sqlite3StrAccumFinish(StrAccum *p){
 ** Reset an StrAccum string.  Reclaim all malloced memory.
 */
 void sqlite3StrAccumReset(StrAccum *p){
-  assert( (p->zText==0 || p->zText==p->zBase)==(p->bMalloced==0) );
-  if( p->bMalloced ){
+  assert( (p->zText==0 || p->zText==p->zBase)==!isMalloced(p) );
+  if( isMalloced(p) ){
     sqlite3DbFree(p->db, p->zText);
-    p->bMalloced = 0;
+    p->printfFlags &= ~SQLITE_PRINTF_MALLOCED;
   }
   p->zText = 0;
 }
@@ -912,7 +911,7 @@ void sqlite3StrAccumInit(StrAccum *p, sqlite3 *db, char *zBase, int n, int mx){
   p->nAlloc = n;
   p->mxAlloc = mx;
   p->accError = 0;
-  p->bMalloced = 0;
+  p->printfFlags = 0;
 }
 
 /*
@@ -926,10 +925,11 @@ char *sqlite3VMPrintf(sqlite3 *db, const char *zFormat, va_list ap){
   assert( db!=0 );
   sqlite3StrAccumInit(&acc, db, zBase, sizeof(zBase),
                       db->aLimit[SQLITE_LIMIT_LENGTH]);
-  sqlite3VXPrintf(&acc, SQLITE_PRINTF_INTERNAL, zFormat, ap);
+  acc.printfFlags = SQLITE_PRINTF_INTERNAL;
+  sqlite3VXPrintf(&acc, zFormat, ap);
   z = sqlite3StrAccumFinish(&acc);
   if( acc.accError==STRACCUM_NOMEM ){
-    db->mallocFailed = 1;
+    sqlite3OomFault(db);
   }
   return z;
 }
@@ -966,7 +966,7 @@ char *sqlite3_vmprintf(const char *zFormat, va_list ap){
   if( sqlite3_initialize() ) return 0;
 #endif
   sqlite3StrAccumInit(&acc, 0, zBase, sizeof(zBase), SQLITE_MAX_LENGTH);
-  sqlite3VXPrintf(&acc, 0, zFormat, ap);
+  sqlite3VXPrintf(&acc, zFormat, ap);
   z = sqlite3StrAccumFinish(&acc);
   return z;
 }
@@ -1011,7 +1011,7 @@ char *sqlite3_vsnprintf(int n, char *zBuf, const char *zFormat, va_list ap){
   }
 #endif
   sqlite3StrAccumInit(&acc, 0, zBuf, n, 0);
-  sqlite3VXPrintf(&acc, 0, zFormat, ap);
+  sqlite3VXPrintf(&acc, zFormat, ap);
   return sqlite3StrAccumFinish(&acc);
 }
 char *sqlite3_snprintf(int n, char *zBuf, const char *zFormat, ...){
@@ -1042,7 +1042,7 @@ static void renderLogMsg(int iErrCode, const char *zFormat, va_list ap){
   char zMsg[SQLITE_PRINT_BUF_SIZE*3];    /* Complete log message */
 
   sqlite3StrAccumInit(&acc, 0, zMsg, sizeof(zMsg), 0);
-  sqlite3VXPrintf(&acc, 0, zFormat, ap);
+  sqlite3VXPrintf(&acc, zFormat, ap);
   sqlite3GlobalConfig.xLog(sqlite3GlobalConfig.pLogArg, iErrCode,
                            sqlite3StrAccumFinish(&acc));
 }
@@ -1071,7 +1071,7 @@ void sqlite3DebugPrintf(const char *zFormat, ...){
   char zBuf[500];
   sqlite3StrAccumInit(&acc, 0, zBuf, sizeof(zBuf), 0);
   va_start(ap,zFormat);
-  sqlite3VXPrintf(&acc, 0, zFormat, ap);
+  sqlite3VXPrintf(&acc, zFormat, ap);
   va_end(ap);
   sqlite3StrAccumFinish(&acc);
   fprintf(stdout,"%s", zBuf);
@@ -1084,9 +1084,139 @@ void sqlite3DebugPrintf(const char *zFormat, ...){
 ** variable-argument wrapper around sqlite3VXPrintf().  The bFlags argument
 ** can contain the bit SQLITE_PRINTF_INTERNAL enable internal formats.
 */
-void sqlite3XPrintf(StrAccum *p, u32 bFlags, const char *zFormat, ...){
+void sqlite3XPrintf(StrAccum *p, const char *zFormat, ...){
   va_list ap;
   va_start(ap,zFormat);
-  sqlite3VXPrintf(p, bFlags, zFormat, ap);
+  sqlite3VXPrintf(p, zFormat, ap);
   va_end(ap);
+}
+
+int sqlite3_str_accum_alloc(sqlite3_str_accum **p, char *zBase, int n, int mx){
+	if(!zBase && n) return SQLITE_MISUSE;
+	StrAccum *acc = (StrAccum *)sqlite3_malloc(sizeof(StrAccum));
+	sqlite3StrAccumInit(acc, 0, zBase, n, mx);
+	//acc->useMalloc = zBase ? 0 : 2;
+	*p = (sqlite3_str_accum*)acc;
+	return SQLITE_OK;
+}
+
+int sqlite3_str_accum_reserve(sqlite3_str_accum *p, int size){
+	if(!p || size < 0) return 0;
+	StrAccum *acc = (StrAccum *)p;
+	int newAlloc = acc->nChar + size;
+	if(newAlloc > acc->nAlloc){
+	  newAlloc = ((newAlloc/1024)+1)*1024;
+	  acc->zText = sqlite3_realloc(acc->zText, newAlloc);
+      if( acc->zText ){
+		acc->nAlloc = newAlloc;
+		if(acc->mxAlloc < newAlloc) acc->mxAlloc = newAlloc;
+		return newAlloc;
+      }else{
+        acc->accError = STRACCUM_NOMEM;
+        sqlite3StrAccumReset(acc);
+      }
+	}
+	return 0;
+}
+
+int sqlite3_str_accum_size(sqlite3_str_accum *p){
+	if(!p) return 0;
+	return ((StrAccum *)p)->nChar;
+}
+
+int sqlite3_str_accum_resize(sqlite3_str_accum *p, int size, char fill){
+	if(!p || size < 0) return 0;
+	StrAccum *sa = (StrAccum *)p;
+	if(size > sa->nAlloc){
+		if(sqlite3_str_accum_reserve(p, size - sa->nChar)) return -1;
+	}
+	if(size > sa->nChar) memset(sa->zText+sa->nChar, fill, size - sa->nChar);
+	sa->nChar = size;
+	return sa->nChar;
+}
+
+int sqlite3_str_accum_capacity(sqlite3_str_accum *p){
+	if(!p) return 0;
+	return ((StrAccum *)p)->nAlloc;
+}
+
+void sqlite3_str_accum_free(sqlite3_str_accum *p){
+	if(p){
+		sqlite3StrAccumReset((StrAccum *)p);
+		sqlite3_free(p);
+	}
+}
+
+void sqlite3_str_accum_reset(sqlite3_str_accum *p, int keepAllocated){
+	if(!p) return;
+	StrAccum *acc = (StrAccum *)p;
+	if(keepAllocated){
+		acc->nChar = 0;
+	} else {
+		sqlite3StrAccumReset(acc);
+	}
+}
+
+char *sqlite3_str_accum_finish(sqlite3_str_accum *p, int keepAllocated){
+  if(!p) return NULL;
+  StrAccum *acc = (StrAccum *)p;
+  if(keepAllocated && acc->nAlloc){
+	//if notthing allocated don't try to set tail zero
+	acc->zText[acc->nChar] = 0;
+	return acc->zText;
+  }
+  return sqlite3StrAccumFinish(acc);
+}
+
+int sqlite3_str_accum_check(sqlite3_str_accum *p){
+  if(!p) return SQLITE_MISUSE;
+  StrAccum *acc = (StrAccum *)p;
+  if(acc->accError == STRACCUM_NOMEM) return SQLITE_NOMEM;
+  if(acc->accError == STRACCUM_TOOBIG) return SQLITE_TOOBIG;
+  return SQLITE_OK;
+}
+
+int sqlite3_str_accum_append(sqlite3_str_accum *p, const char *z, int N){
+  if(!p) return SQLITE_MISUSE;
+  StrAccum *acc = (StrAccum *)p;
+  sqlite3StrAccumAppend(acc, z, N);
+  return sqlite3_str_accum_check(p);
+}
+
+char *sqlite3_str_accum_vprintf(sqlite3_str_accum *p, const char *zFormat, va_list ap){
+  if(!p || !zFormat) return NULL;
+  StrAccum *acc = (StrAccum *)p;
+  sqlite3VXPrintf(acc, zFormat, ap);
+  return sqlite3_str_accum_finish(p, 1);  
+}
+
+char *sqlite3_str_accum_printf(sqlite3_str_accum *p, const char *zFormat, ...){
+  va_list ap;
+  char *z;
+#ifndef SQLITE_OMIT_AUTOINIT
+  if( sqlite3_initialize() ) return 0;
+#endif
+  va_start(ap, zFormat);
+  z = sqlite3_str_accum_vprintf(p, zFormat, ap);
+  va_end(ap);
+  return z;
+}
+
+int sqlite3_ivsnprintf(char *zBuf, int n, const char *zFormat, va_list ap){
+  StrAccum acc;
+  if( n<=0 ) return 0;
+  sqlite3StrAccumInit(&acc, 0, zBuf, n, 0);
+  //acc.useMalloc = 0;
+  sqlite3VXPrintf(&acc, zFormat, ap);
+  sqlite3StrAccumFinish(&acc);
+  return acc.nChar;
+}
+
+int sqlite3_isnprintf(char *zBuf, int n, const char *zFormat, ...){
+  int result;
+  va_list ap;
+  va_start(ap,zFormat);
+  result = sqlite3_ivsnprintf(zBuf, n, zFormat, ap);
+  va_end(ap);
+  return result;
 }

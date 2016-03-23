@@ -1,0 +1,5 @@
+The SQLite functions were written by CIS students at Kansas State University
+and their instructor in the CIS 308 (C/C++ Labs) course.
+
+These libraries have been created out of code contributed by:
+Casey Andres, Joshua Benard, Connor Berg, Blaine Bettencourt, Christopher Boschert, Logan Brecheisen, Brian Buchta, Dustin Chew, Austin Elliott, Daniel Elsbernd, Uzoma Emuchay, Fan Zhiang, Austin Fangman, Stéphane Faroult, David Freeman, Jonathan Gooden, Christian Hughes, Joshua Humphreys, Jordan Jacobs, Brent Johnson, Nicholas Johnson, Patrick Kliesner, Pavel Kuropatkin, Joshua Langford, Andrew Leigh, Li Yuanyang, Kevin Manase, Blake Martin, Andrew Massey, Sagar Mehta, Steven Mercier, Grant Meyerhoff, Ifeanyichukwu Otuonye, Arunothayan Paramanathan, Joseph Perkins, Corey Porubsky, Caullen Sasnett, Say Gui, Zachary Sliefert, Jeremy Taylor, Matthew Traudt, James Tyson, Phillip Urban, Daniel Wagner, George Walker, Geordy Williams, Hayden Wilson, Wong Jiawen, Hayden Woods, Zhang Kai, and another student who wished stay anonymous.

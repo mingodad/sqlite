@@ -208,6 +208,7 @@ limit_where_cleanup:
 void sqlite3DeleteFrom(
   Parse *pParse,         /* The parser context */
   SrcList *pTabList,     /* The table from which we should delete things */
+  Token *pAlias,          /* The right-hand side of the AS subexpression */
   Expr *pWhere           /* The WHERE clause.  May be null */
 ){
   Vdbe *v;               /* The virtual database engine */
@@ -239,6 +240,7 @@ void sqlite3DeleteFrom(
   int addrBypass = 0;    /* Address of jump over the delete logic */
   int addrLoop = 0;      /* Top of the delete loop */
   int addrEphOpen = 0;   /* Instruction to open the Ephemeral table */
+  struct SrcList_item *pItem; /*To namage table alias*/
  
 #ifndef SQLITE_OMIT_TRIGGER
   int isView;                  /* True if attempting to delete from a view */
@@ -252,6 +254,12 @@ void sqlite3DeleteFrom(
     goto delete_from_cleanup;
   }
   assert( pTabList->nSrc==1 );
+
+  /*Manage table alias*/
+  pItem = &pTabList->a[pTabList->nSrc-1];
+  if( pAlias && pAlias->n ){
+    pItem->zAlias = sqlite3NameFromToken(db, pAlias);
+  }
 
   /* Locate the table which we want to delete.  This table has to be
   ** put in an SrcList structure because some of the subroutines we

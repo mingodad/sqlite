@@ -89,6 +89,7 @@ void sqlite3ColumnDefault(Vdbe *v, Table *pTab, int i, int iReg){
 void sqlite3Update(
   Parse *pParse,         /* The parser context */
   SrcList *pTabList,     /* The table in which we should change things */
+  Token *pAlias,          /* The right-hand side of the AS subexpression */
   ExprList *pChanges,    /* Things to be changed */
   Expr *pWhere,          /* The WHERE clause.  May be null */
   int onError            /* How to handle constraint errors */
@@ -121,6 +122,7 @@ void sqlite3Update(
   int hasFK;             /* True if foreign key processing is required */
   int labelBreak;        /* Jump here to break out of UPDATE loop */
   int labelContinue;     /* Jump here to continue next step of UPDATE loop */
+  struct SrcList_item *pItem; /*To namage table alias*/
 
 #ifndef SQLITE_OMIT_TRIGGER
   int isView;            /* True when updating a view (INSTEAD OF trigger) */
@@ -148,6 +150,12 @@ void sqlite3Update(
   }
   assert( pTabList->nSrc==1 );
 
+  /*Manage table alias*/
+  pItem = &pTabList->a[pTabList->nSrc-1];
+  if( pAlias && pAlias->n ){
+    pItem->zAlias = sqlite3NameFromToken(db, pAlias);
+  }
+  
   /* Locate the table which we want to update. 
   */
   pTab = sqlite3SrcListLookup(pParse, pTabList);

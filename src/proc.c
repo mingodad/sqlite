@@ -448,7 +448,7 @@ int sqlite3CompileSQLStmt(Parse *pParse, SP_Block *b, SP_SQLStmt* pSql){
   case TK_UPDATE: {
     SrcList *pSrc;
     pSrc = sqlite3SrcListAppend(db, 0, &pSql->target, 0);
-    sqlite3Update(pParse, pSrc, pSql->pExprList, pSql->pWhere, pSql->orconf);
+    sqlite3Update(pParse, pSrc, 0, pSql->pExprList, pSql->pWhere, pSql->orconf);
     break;
   }
   case TK_INSERT: {
@@ -460,7 +460,7 @@ int sqlite3CompileSQLStmt(Parse *pParse, SP_Block *b, SP_SQLStmt* pSql){
   case TK_DELETE: {
     SrcList *pSrc;
     pSrc = sqlite3SrcListAppend(db, 0, &pSql->target, 0);
-    sqlite3DeleteFrom(pParse, pSrc, pSql->pWhere);
+    sqlite3DeleteFrom(pParse, pSrc, 0, pSql->pWhere);
     break;
   }
   default:

@@ -111,6 +111,8 @@ foreach hdr {
    pcache.h
    pragma.h
    rtree.h
+   sqlite3session.h
+   sqlite3ext.h
    sqlite3.h
    rijndael.h
    codec.h
@@ -132,6 +134,7 @@ foreach hdr {
   set available_hdr($hdr) 1
 }
 set available_hdr(sqliteInt.h) 0
+set available_hdr(sqlite3session.h) 0
 
 # These headers should be copied into the amalgamation without modifying any
 # of their function declarations or definitions.
@@ -226,7 +229,7 @@ proc copy_file {filename} {
         regsub {^SQLITE_API } $line {} line
         # Add the SQLITE_PRIVATE or SQLITE_API keyword before functions.
         # so that linkage can be modified at compile-time.
-        if {[regexp {^sqlite3(_|rbu_)} $funcname]} {
+        if {[regexp {^sqlite3[a-z]*_} $funcname]} {
           set line SQLITE_API
           append line " " [string trim $rettype]
           if {[string index $rettype end] ne "*"} {
@@ -390,6 +393,7 @@ foreach file {
    fts3_icu.c
    sqlite3rbu.c
    dbstat.c
+   sqlite3session.c
    json1.c
    fts5.c
    sqlite3secure.c

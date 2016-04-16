@@ -26,13 +26,13 @@
 ** that includes the PragType_XXXX macro definitions and the aPragmaName[]
 ** object.  This ensures that the aPragmaName[] table is arranged in
 ** lexicographical order to facility a binary search of the pragma name.
-** Do not edit pragma.h directly.  Edit and rerun the script in at 
+** Do not edit pragma.h directly.  Edit and rerun the script in at
 ** ../tool/mkpragmatab.tcl. */
 #include "pragma.h"
 
 /*
 ** Interpret the given string as a safety level.  Return 0 for OFF,
-** 1 for ON or NORMAL, 2 for FULL, and 3 for EXTRA.  Return 1 for an empty or 
+** 1 for ON or NORMAL, 2 for FULL, and 3 for EXTRA.  Return 1 for an empty or
 ** unrecognized string argument.  The FULL and EXTRA option is disallowed
 ** if the omitFull parameter it 1.
 **
@@ -91,7 +91,7 @@ static int getLockingMode(const char *z){
 /*
 ** Interpret the given string as an auto-vacuum mode value.
 **
-** The following strings, "none", "full" and "incremental" are 
+** The following strings, "none", "full" and "incremental" are
 ** acceptable, as are their numeric equivalents: 0, 1 and 2 respectively.
 */
 static int getAutoVacuum(const char *z){
@@ -245,7 +245,7 @@ static const char *actionName(u8 action){
     case OE_SetDflt:  zName = "SET DEFAULT";     break;
     case OE_Cascade:  zName = "CASCADE";         break;
     case OE_Restrict: zName = "RESTRICT";        break;
-    default:          zName = "NO ACTION";  
+    default:          zName = "NO ACTION";
                       assert( action==OE_None ); break;
   }
   return zName;
@@ -278,7 +278,7 @@ const char *sqlite3JournalModename(int eMode){
 }
 
 /*
-** Process a pragma statement.  
+** Process a pragma statement.
 **
 ** Pragmas are of this form:
 **
@@ -293,7 +293,7 @@ const char *sqlite3JournalModename(int eMode){
 ** id and pId2 is any empty string.
 */
 void sqlite3Pragma(
-  Parse *pParse, 
+  Parse *pParse,
   Token *pId1,        /* First part of [schema.]id field */
   Token *pId2,        /* Second part of [schema.]id field, or NULL */
   Token *pValue,      /* Token for <value>, or NULL */
@@ -322,8 +322,8 @@ void sqlite3Pragma(
   if( iDb<0 ) return;
   pDb = &db->aDb[iDb];
 
-  /* If the temp database has been explicitly named as part of the 
-  ** pragma, make sure it is open. 
+  /* If the temp database has been explicitly named as part of the
+  ** pragma, make sure it is open.
   */
   if( iDb==1 && sqlite3OpenTempDatabase(pParse) ){
     return;
@@ -402,7 +402,7 @@ void sqlite3Pragma(
 
   /* Jump to the appropriate pragma handler */
   switch( pPragma->ePragTyp ){
-  
+
 #if !defined(SQLITE_OMIT_PAGER_PRAGMAS) && !defined(SQLITE_OMIT_DEPRECATED)
   /*
   **  PRAGMA [schema.]default_cache_size
@@ -515,7 +515,7 @@ void sqlite3Pragma(
   **  PRAGMA [schema.]max_page_count=N
   **
   ** The first form reports the current setting for the
-  ** maximum number of pages in the database file.  The 
+  ** maximum number of pages in the database file.  The
   ** second form attempts to change this setting.  Both
   ** forms return the current setting.
   **
@@ -534,7 +534,7 @@ void sqlite3Pragma(
     if( sqlite3Tolower(zLeft[0])=='p' ){
       sqlite3VdbeAddOp2(v, OP_Pagecount, iDb, iReg);
     }else{
-      sqlite3VdbeAddOp3(v, OP_MaxPgcnt, iDb, iReg, 
+      sqlite3VdbeAddOp3(v, OP_MaxPgcnt, iDb, iReg,
                         sqlite3AbsInt32(sqlite3Atoi(zRight)));
     }
     sqlite3VdbeAddOp2(v, OP_ResultRow, iReg, 1);
@@ -674,7 +674,7 @@ void sqlite3Pragma(
       */
       rc = sqlite3BtreeSetAutoVacuum(pBt, eAuto);
       if( rc==SQLITE_OK && (eAuto==1 || eAuto==2) ){
-        /* When setting the auto_vacuum mode to either "full" or 
+        /* When setting the auto_vacuum mode to either "full" or
         ** "incremental", write the value of meta[6] in the database
         ** file. Before writing to meta[6], check that meta[3] indicates
         ** that this really is an auto-vacuum capable database.
@@ -775,8 +775,8 @@ void sqlite3Pragma(
   case PragTyp_CACHE_SPILL: {
     assert( sqlite3SchemaMutexHeld(db, iDb, 0) );
     if( !zRight ){
-      returnSingleInt(v, "cache_spill", 
-         (db->flags & SQLITE_CacheSpill)==0 ? 0 : 
+      returnSingleInt(v, "cache_spill",
+         (db->flags & SQLITE_CacheSpill)==0 ? 0 :
             sqlite3BtreeSetSpillSize(pDb->pBt,0));
     }else{
       int size = 1;
@@ -950,7 +950,7 @@ void sqlite3Pragma(
       Pager *pPager = sqlite3BtreePager(pDb->pBt);
       char *proxy_file_path = NULL;
       sqlite3_file *pFile = sqlite3PagerFile(pPager);
-      sqlite3OsFileControlHint(pFile, SQLITE_GET_LOCKPROXYFILE, 
+      sqlite3OsFileControlHint(pFile, SQLITE_GET_LOCKPROXYFILE,
                            &proxy_file_path);
       returnSingleText(v, "lock_proxy_file", proxy_file_path);
     }else{
@@ -958,10 +958,10 @@ void sqlite3Pragma(
       sqlite3_file *pFile = sqlite3PagerFile(pPager);
       int res;
       if( zRight[0] ){
-        res=sqlite3OsFileControl(pFile, SQLITE_SET_LOCKPROXYFILE, 
+        res=sqlite3OsFileControl(pFile, SQLITE_SET_LOCKPROXYFILE,
                                      zRight);
       } else {
-        res=sqlite3OsFileControl(pFile, SQLITE_SET_LOCKPROXYFILE, 
+        res=sqlite3OsFileControl(pFile, SQLITE_SET_LOCKPROXYFILE,
                                      NULL);
       }
       if( res!=SQLITE_OK ){
@@ -971,8 +971,8 @@ void sqlite3Pragma(
     }
     break;
   }
-#endif /* SQLITE_ENABLE_LOCKING_STYLE */      
-    
+#endif /* SQLITE_ENABLE_LOCKING_STYLE */
+
   /*
   **   PRAGMA [schema.]synchronous
   **   PRAGMA [schema.]synchronous=OFF|ON|NORMAL|FULL|EXTRA
@@ -987,7 +987,7 @@ void sqlite3Pragma(
       returnSingleInt(v, "synchronous", pDb->safety_level-1);
     }else{
       if( !db->autoCommit ){
-        sqlite3ErrorMsg(pParse, 
+        sqlite3ErrorMsg(pParse,
             "Safety level may not be changed inside a transaction");
       }else{
         int iLevel = (getSafetyLevel(zRight,0,1)+1) & PAGER_SYNCHRONOUS_MASK;
@@ -1026,7 +1026,7 @@ void sqlite3Pragma(
         if( mask==SQLITE_DeferFKs ) db->nDeferredImmCons = 0;
       }
 
-      /* Many of the flag-pragmas modify the code generated by the SQL 
+      /* Many of the flag-pragmas modify the code generated by the SQL
       ** compiler (eg. count_changes). So add an opcode to expire all
       ** compiled SQL statements after modifying a pragma value.
       */
@@ -1229,7 +1229,7 @@ void sqlite3Pragma(
            "id", "seq", "table", "from", "to", "on_update", "on_delete",
            "match"
         };
-        int i = 0; 
+        int i = 0;
         pParse->nMem = 8;
         sqlite3CodeVerifySchema(pParse, iDb);
         setAllColumnNames(v, 8, azCol); assert( 8==ArraySize(azCol) );
@@ -1334,7 +1334,7 @@ void sqlite3Pragma(
             sqlite3VdbeAddOp3(v, OP_Column, 0, iKey, regRow);
             sqlite3ColumnDefault(v, pTab, iKey, regRow);
             sqlite3VdbeAddOp2(v, OP_IsNull, regRow, addrOk); VdbeCoverage(v);
-            sqlite3VdbeAddOp2(v, OP_MustBeInt, regRow, 
+            sqlite3VdbeAddOp2(v, OP_MustBeInt, regRow,
                sqlite3VdbeCurrentAddr(v)+3); VdbeCoverage(v);
           }else{
             sqlite3VdbeAddOp2(v, OP_Rowid, 0, regRow);
@@ -1388,6 +1388,9 @@ void sqlite3Pragma(
   case PragTyp_CASE_SENSITIVE_LIKE: {
     if( zRight ){
       sqlite3RegisterLikeFunctions(db, sqlite3GetBoolean(zRight, 0));
+    }else{
+      FuncDef *pDef = sqlite3FindFunction(db, "like", 2, SQLITE_UTF8, 0);
+      returnSingleInt(v, "case_sensitive_like", pDef && (pDef->funcFlags & SQLITE_FUNC_CASE));
     }
   }
   break;
@@ -1397,7 +1400,7 @@ void sqlite3Pragma(
 #endif
 
 #ifndef SQLITE_OMIT_INTEGRITY_CHECK
-  /* Pragma "quick_check" is reduced version of 
+  /* Pragma "quick_check" is reduced version of
   ** integrity_check designed to detect most database corruption
   ** without most of the overhead of a full integrity-check.
   */
@@ -1606,7 +1609,7 @@ void sqlite3Pragma(
           sqlite3VdbeAddOp2(v, OP_ResultRow, 7, 1);
         }
 #endif /* SQLITE_OMIT_BTREECOUNT */
-      } 
+      }
     }
     {
       static const int iLn = VDBE_OFFSET_LINENO(2);
@@ -1642,7 +1645,7 @@ void sqlite3Pragma(
   ** encoding that will be used for the main database file if a new file
   ** is created. If an existing main database file is opened, then the
   ** default text encoding for the existing database is used.
-  ** 
+  **
   ** In all cases new databases created using the ATTACH command are
   ** created to use the same default text encoding as the main database. If
   ** the main database has not been initialized and/or created when ATTACH
@@ -1680,9 +1683,9 @@ void sqlite3Pragma(
       ** will be overwritten when the schema is next loaded. If it does not
       ** already exists, it will be created to use the new encoding value.
       */
-      if( 
-        !(DbHasProperty(db, 0, DB_SchemaLoaded)) || 
-        DbHasProperty(db, 0, DB_Empty) 
+      if(
+        !(DbHasProperty(db, 0, DB_SchemaLoaded)) ||
+        DbHasProperty(db, 0, DB_Empty)
       ){
         for(pEnc=&encnames[0]; pEnc->zName; pEnc++){
           if( 0==sqlite3StrICmp(zRight, pEnc->zName) ){
@@ -1831,8 +1834,8 @@ void sqlite3Pragma(
     if( zRight ){
       sqlite3_wal_autocheckpoint(db, sqlite3Atoi(zRight));
     }
-    returnSingleInt(v, "wal_autocheckpoint", 
-       db->xWalCallback==sqlite3WalDefaultHook ? 
+    returnSingleInt(v, "wal_autocheckpoint",
+       db->xWalCallback==sqlite3WalDefaultHook ?
            SQLITE_PTR_TO_INT(db->pWalArg) : 0);
   }
   break;
@@ -1928,7 +1931,7 @@ void sqlite3Pragma(
       pBt = db->aDb[i].pBt;
       if( pBt==0 || sqlite3BtreePager(pBt)==0 ){
         zState = "closed";
-      }else if( sqlite3_file_control(db, i ? db->aDb[i].zName : 0, 
+      }else if( sqlite3_file_control(db, i ? db->aDb[i].zName : 0,
                                      SQLITE_FCNTL_LOCKSTATE, &j)==SQLITE_OK ){
          zState = azLockName[j];
       }

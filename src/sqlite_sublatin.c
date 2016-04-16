@@ -224,6 +224,31 @@ static void sl_like_deaccentFunc(
   }
 }
 
+/*
+** Set the LIKEOPT flag on the 2-argument function with the given name.
+*/
+static void setLikeOptFlagSubLatin(sqlite3 *db, int narg){
+  FuncDef *pDef;
+  pDef = sqlite3FindFunction(db, "like", narg, SQLITE_UTF8, 0);
+  if( ALWAYS(pDef) ){
+    pDef->funcFlags |= SQLITE_FUNC_LIKE;
+  }
+}
+
+/*After the LIKE optmization implementation the user defined like was broken
+and now we copy the missing bits here to make it work again */
+/*
+** A structure defining how to do GLOB-style comparisons.
+*/
+struct compareInfoSubLatin {
+  u8 matchAll;          /* "*" or "%" */
+  u8 matchOne;          /* "?" or "_" */
+  u8 matchSet;          /* "[" or 0 */
+  u8 noCase;            /* true to ignore case differences */
+};
+
+static const struct compareInfoSubLatin likeInfoNormSubLatin = { '%', '_',   0, 1 };
+
 int sqlite3RegisterSubLatinFunctions(sqlite3 *db, int flags){
   int rc;
   rc = sqlite3_create_collation(db, "NOCASE_SLNA", SQLITE_UTF8, NULL,
@@ -250,20 +275,20 @@ int sqlite3RegisterSubLatinFunctions(sqlite3 *db, int flags){
       NULL, sl_deaccentFunc, NULL, NULL);
   if(rc != SQLITE_OK) return rc;
 
-  rc = sqlite3_create_function(db, "like_sl", 2, SQLITE_UTF8 | SQLITE_DETERMINISTIC, NULL,
-      sl_likeFunc, NULL, NULL);
+  rc = sqlite3_create_function(db, "like_sl", 2, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_FUNC_LIKE,
+      (void*)&likeInfoNormSubLatin, sl_likeFunc, NULL, NULL);
   if(rc != SQLITE_OK) return rc;
 
-  rc = sqlite3_create_function(db, "like_sl", 3, SQLITE_UTF8 | SQLITE_DETERMINISTIC, NULL,
-      sl_likeFunc, NULL, NULL);
+  rc = sqlite3_create_function(db, "like_sl", 3, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_FUNC_LIKE,
+      (void*)&likeInfoNormSubLatin, sl_likeFunc, NULL, NULL);
   if(rc != SQLITE_OK) return rc;
 
-  rc = sqlite3_create_function(db, "like_slna", 2, SQLITE_UTF8 | SQLITE_DETERMINISTIC, NULL,
-      sl_like_deaccentFunc, NULL, NULL);
+  rc = sqlite3_create_function(db, "like_slna", 2, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_FUNC_LIKE,
+      (void*)&likeInfoNormSubLatin, sl_like_deaccentFunc, NULL, NULL);
   if(rc != SQLITE_OK) return rc;
 
-  rc = sqlite3_create_function(db, "like_slna", 3, SQLITE_UTF8 | SQLITE_DETERMINISTIC, NULL,
-      sl_like_deaccentFunc, NULL, NULL);
+  rc = sqlite3_create_function(db, "like_slna", 3, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_FUNC_LIKE,
+      (void*)&likeInfoNormSubLatin, sl_like_deaccentFunc, NULL, NULL);
   if(rc != SQLITE_OK) return rc;
 
   if((flags & SQLITE_OPEN_SUBLATIN_LIKE) || (flags & SQLITE_OPEN_SUBLATIN_NA_LIKE)){
@@ -281,23 +306,27 @@ int sqlite3RegisterSubLatinFunctions(sqlite3 *db, int flags){
   }
 
   if(flags & SQLITE_OPEN_SUBLATIN_LIKE){
-    rc = sqlite3_create_function(db, "like", 2, SQLITE_UTF8 | SQLITE_DETERMINISTIC, NULL,
-	  sl_likeFunc, NULL, NULL);
+    rc = sqlite3_create_function(db, "like", 2, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_FUNC_LIKE,
+	  (void*)&likeInfoNormSubLatin, sl_likeFunc, NULL, NULL);
 	if(rc != SQLITE_OK) return rc;
+	setLikeOptFlagSubLatin(db, 2);
 
-	rc = sqlite3_create_function(db, "like", 3, SQLITE_UTF8 | SQLITE_DETERMINISTIC, NULL,
-	  sl_likeFunc, NULL, NULL);
+	rc = sqlite3_create_function(db, "like", 3, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_FUNC_LIKE,
+	  (void*)&likeInfoNormSubLatin, sl_likeFunc, NULL, NULL);
 	if(rc != SQLITE_OK) return rc;
+	setLikeOptFlagSubLatin(db, 3);
   }
 
   if(flags & SQLITE_OPEN_SUBLATIN_NA_LIKE){
-	rc = sqlite3_create_function(db, "like", 2, SQLITE_UTF8 | SQLITE_DETERMINISTIC, NULL,
-	  sl_like_deaccentFunc, NULL, NULL);
+	rc = sqlite3_create_function(db, "like", 2, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_FUNC_LIKE,
+	  (void*)&likeInfoNormSubLatin, sl_like_deaccentFunc, NULL, NULL);
 	if(rc != SQLITE_OK) return rc;
+	setLikeOptFlagSubLatin(db, 2);
 
-	rc = sqlite3_create_function(db, "like", 3, SQLITE_UTF8 | SQLITE_DETERMINISTIC, NULL,
-	  sl_like_deaccentFunc, NULL, NULL);
+	rc = sqlite3_create_function(db, "like", 3, SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_FUNC_LIKE,
+	  (void*)&likeInfoNormSubLatin, sl_like_deaccentFunc, NULL, NULL);
 	if(rc != SQLITE_OK) return rc;
+	setLikeOptFlagSubLatin(db, 3);
   }
 
   return rc;

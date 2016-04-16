@@ -378,9 +378,6 @@ SRC += \
   $(TOP)/ext/misc/series.c \
   $(TOP)/ext/misc/eval.c
 SRC += \
-  $(TOP)/ext/session/sqlite3session.c \
-  $(TOP)/ext/session/sqlite3session.h
-SRC += \
   $(TOP)/ext/rbu/sqlite3rbu.h \
   $(TOP)/ext/rbu/sqlite3rbu.c \
   $(TOP)/ext/session/sqlite3session.c \

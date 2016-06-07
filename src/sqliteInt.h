@@ -15,6 +15,33 @@
 #ifndef _SQLITEINT_H_
 #define _SQLITEINT_H_
 
+/* Special Comments:
+**
+** Some comments have special meaning to the tools that measure test
+** coverage:
+**
+**    NO_TEST                     - The branches on this line are not
+**                                  measured by branch coverage.  This is
+**                                  used on lines of code that actually
+**                                  implement parts of coverage testing.
+**
+**    OPTIMIZATION-IF-TRUE        - This branch is allowed to alway be false
+**                                  and the correct answer is still obtained,
+**                                  though perhaps more slowly.
+**
+**    OPTIMIZATION-IF-FALSE       - This branch is allowed to alway be true
+**                                  and the correct answer is still obtained,
+**                                  though perhaps more slowly.
+**
+**    PREVENTS-HARMLESS-OVERREAD  - This branch prevents a buffer overread
+**                                  that would be harmless and undetectable
+**                                  if it did occur.  
+**
+** In all cases, the special comment must be enclosed in the usual
+** slash-asterisk...asterisk-slash comment marks, with no spaces between the 
+** asterisks and the comment text.
+*/
+
 /*
 ** Make sure that rand_s() is available on Windows systems with MSVC 2005
 ** or higher.
@@ -384,7 +411,7 @@
 ** be true and false so that the unreachable code they specify will
 ** not be counted as untested code.
 */
-#if defined(SQLITE_COVERAGE_TEST)
+#if defined(SQLITE_COVERAGE_TEST) || defined(SQLITE_MUTATION_TEST)
 # define ALWAYS(X)      (1)
 # define NEVER(X)       (0)
 #elif !defined(NDEBUG)
@@ -474,6 +501,7 @@
 */
 #ifdef SQLITE_OMIT_FLOATING_POINT
 # define sqlite_double sqlite_int64
+# define sqlite_float int
 # define TO_SQLITE_DOUBLE(x)  (x)
 # define LITDBL(n) n
 # define float sqlite_int64
@@ -488,11 +516,13 @@
 #else
 # ifdef SQLITE_USE_DECIMAL
 # define sqlite_double  _Decimal64
+# define sqlite_float  _Decimal32
 # define TO_SQLITE_DOUBLE(x)  __bid_extenddfdd(x)
 # define LITDBL(n) n##dd
 #  define LONGDOUBLE_TYPE _Decimal128
 # else
 #  define sqlite_double  double
+#  define sqlite_float  float
 # define TO_SQLITE_DOUBLE(x)  (x)
 #  define LITDBL(n) n
 #  define LONGDOUBLE_TYPE long double
@@ -1401,13 +1431,14 @@ struct sqlite3 {
 #define SQLITE_AutoIndex      0x00100000  /* Enable automatic indexes */
 #define SQLITE_PreferBuiltin  0x00200000  /* Preference to built-in funcs */
 #define SQLITE_LoadExtension  0x00400000  /* Enable load_extension */
-#define SQLITE_EnableTrigger  0x00800000  /* True to enable triggers */
-#define SQLITE_DeferFKs       0x01000000  /* Defer all FK constraints */
-#define SQLITE_QueryOnly      0x02000000  /* Disable database changes */
-#define SQLITE_VdbeEQP        0x04000000  /* Debug EXPLAIN QUERY PLAN */
-#define SQLITE_Vacuum         0x08000000  /* Currently in a VACUUM */
-#define SQLITE_CellSizeCk     0x10000000  /* Check btree cell sizes on load */
-#define SQLITE_Fts3Tokenizer  0x20000000  /* Enable fts3_tokenizer(2) */
+#define SQLITE_LoadExtFunc    0x00800000  /* Enable load_extension() SQL func */
+#define SQLITE_EnableTrigger  0x01000000  /* True to enable triggers */
+#define SQLITE_DeferFKs       0x02000000  /* Defer all FK constraints */
+#define SQLITE_QueryOnly      0x04000000  /* Disable database changes */
+#define SQLITE_VdbeEQP        0x08000000  /* Debug EXPLAIN QUERY PLAN */
+#define SQLITE_Vacuum         0x10000000  /* Currently in a VACUUM */
+#define SQLITE_CellSizeCk     0x20000000  /* Check btree cell sizes on load */
+#define SQLITE_Fts3Tokenizer  0x40000000  /* Enable fts3_tokenizer(2) */
 #define SQLITE_SqlTraceModOnly     0x80000000  /* Only output queries that modify the database */
 
 /*
@@ -2522,18 +2553,20 @@ struct SrcList {
 #define WHERE_ORDERBY_MIN      0x0001 /* ORDER BY processing for min() func */
 #define WHERE_ORDERBY_MAX      0x0002 /* ORDER BY processing for max() func */
 #define WHERE_ONEPASS_DESIRED  0x0004 /* Want to do one-pass UPDATE/DELETE */
-#define WHERE_DUPLICATES_OK    0x0008 /* Ok to return a row more than once */
-#define WHERE_OMIT_OPEN_CLOSE  0x0010 /* Table cursors are already open */
-#define WHERE_FORCE_TABLE      0x0020 /* Do not use an index-only search */
-#define WHERE_ONETABLE_ONLY    0x0040 /* Only code the 1st table in pTabList */
-#define WHERE_NO_AUTOINDEX     0x0080 /* Disallow automatic indexes */
-#define WHERE_GROUPBY          0x0100 /* pOrderBy is really a GROUP BY */
-#define WHERE_DISTINCTBY       0x0200 /* pOrderby is really a DISTINCT clause */
-#define WHERE_WANT_DISTINCT    0x0400 /* All output needs to be distinct */
-#define WHERE_SORTBYGROUP      0x0800 /* Support sqlite3WhereIsSorted() */
-#define WHERE_REOPEN_IDX       0x1000 /* Try to use OP_ReopenIdx */
-#define WHERE_ONEPASS_MULTIROW 0x2000 /* ONEPASS is ok with multiple rows */
-#define WHERE_USE_LIMIT        0x4000 /* There is a constant LIMIT clause */
+#define WHERE_ONEPASS_MULTIROW 0x0008 /* ONEPASS is ok with multiple rows */
+#define WHERE_DUPLICATES_OK    0x0010 /* Ok to return a row more than once */
+#define WHERE_OR_SUBCLAUSE     0x0020 /* Processing a sub-WHERE as part of
+                                      ** the OR optimization  */
+#define WHERE_GROUPBY          0x0040 /* pOrderBy is really a GROUP BY */
+#define WHERE_DISTINCTBY       0x0080 /* pOrderby is really a DISTINCT clause */
+#define WHERE_WANT_DISTINCT    0x0100 /* All output needs to be distinct */
+#define WHERE_SORTBYGROUP      0x0200 /* Support sqlite3WhereIsSorted() */
+#define WHERE_SEEK_TABLE       0x0400 /* Do not defer seeks on main table */
+#define WHERE_ORDERBY_LIMIT    0x0800 /* ORDERBY+LIMIT on the inner loop */
+                        /*     0x1000    not currently used */
+                        /*     0x2000    not currently used */
+#define WHERE_USE_LIMIT        0x4000 /* Use the LIMIT in cost estimates */
+                        /*     0x8000    not currently used */
 
 /* Allowed return values from sqlite3WhereIsDistinct()
 */
@@ -2588,6 +2621,7 @@ struct NameContext {
 #define NC_InAggFunc 0x0008  /* True if analyzing arguments to an agg func */
 #define NC_HasAgg    0x0010  /* One or more aggregate functions seen */
 #define NC_IdxExpr   0x0020  /* True if resolving columns of CREATE INDEX */
+#define NC_VarSelect 0x0040  /* A correlated subquery has been seen */
 #define NC_MinMaxAgg 0x1000  /* min/max aggregates seen.  See note above */
 
 /*
@@ -3606,8 +3640,8 @@ void sqlite3SrcListAssignCursors(Parse*, SrcList*);
 void sqlite3IdListDelete(sqlite3*, IdList*);
 void sqlite3SrcListDelete(sqlite3*, SrcList*);
 Index *sqlite3AllocateIndexObject(sqlite3*,i16,int,char**);
-Index *sqlite3CreateIndex(Parse*,Token*,Token*,SrcList*,ExprList*,int,Token*,
-                          Expr*, int, int);
+void sqlite3CreateIndex(Parse*,Token*,Token*,SrcList*,ExprList*,int,Token*,
+                          Expr*, int, int, u8);
 void sqlite3DropIndex(Parse*, SrcList*, int);
 int sqlite3Select(Parse*, Select*, SelectDest*);
 Select *sqlite3SelectNew(Parse*,ExprList*,SrcList*,Expr*,ExprList*,
@@ -3626,6 +3660,7 @@ void sqlite3WhereEnd(WhereInfo*);
 LogEst sqlite3WhereOutputRowCount(WhereInfo*);
 int sqlite3WhereIsDistinct(WhereInfo*);
 int sqlite3WhereIsOrdered(WhereInfo*);
+int sqlite3WhereOrderedInnerLoop(WhereInfo*);
 int sqlite3WhereIsSorted(WhereInfo*);
 int sqlite3WhereContinueLabel(WhereInfo*);
 int sqlite3WhereBreakLabel(WhereInfo*);

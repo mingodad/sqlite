@@ -54,7 +54,7 @@ Usage instructions for the sqlite3 program:
   security measure; see "Security Considerations" in
   http://www.sqlite.org/cvstrac/wiki?p=LoadableExtensions.
   If the sqlite3 program and library are built this
-  way, you cannot use these functions from the program, you 
+  way, you cannot use these functions from the program, you
   must write your own program using the sqlite3 API, and call
   sqlite3_enable_load_extension as described above, or else
   rebuilt the sqlite3 program to allow loadable extensions.
@@ -1971,11 +1971,11 @@ static void	sqlitex_is_inside_circle(sqlite3_context * context, int argc, sqlite
 	y2 = sqlite3_value_double(argv[4]);
 	xd = fabs(x1 - x2);
 	yd = fabs(y1 - y2);
-	
+
 	if(xd + yd <= r) result = 1;
 	else if( (xd > r)  || ( yd > r ) ) result = 0;
 	else if( (xd*xd) + (yd*yd) <= (r*r) ) result = 1;
-	
+
 	sqlite3_result_int(context, result);
 }
 
@@ -2159,6 +2159,59 @@ static void lastRowsFunc(sqlite3_context *context, int argc, sqlite3_value **arg
 }
 
 /*
+** accumulate numbers returning tha accumulated value so far
+* first parameter is the start value and the second is normally
+* a database field to accumulate
+*/
+typedef struct
+{
+    sqlite_double value;
+} accumulate_st;
+
+static void accumulateFunc(sqlite3_context *context, int argc, sqlite3_value **argv){
+  assert( argc==2 );
+  int setAux = 0;           /* True to invoke sqlite3_set_auxdata() */
+  //i64 iVal=0;
+  accumulate_st *saved_value=sqlite3_get_auxdata(context, 0);
+  if(saved_value==NULL)
+  {
+      saved_value = sqlite3_malloc(sizeof(*saved_value));
+      setAux=1;
+      switch( sqlite3_value_type(argv[0]) ){
+        case SQLITE_INTEGER: {
+          saved_value->value = (sqlite_double)sqlite3_value_int64(argv[0]);
+          break;
+        }
+        case SQLITE_NULL: {
+          saved_value->value = LITDBL(0.0);
+          break;
+        }
+        default: {
+          saved_value->value = sqlite3_value_double(argv[0]);
+          break;
+        }
+      }
+  }
+  switch( sqlite3_value_type(argv[1]) ){
+    case SQLITE_INTEGER: {
+      saved_value->value += (sqlite_double)sqlite3_value_int64(argv[1]);
+      break;
+    }
+    case SQLITE_NULL: {
+      break;
+    }
+    default: {
+      saved_value->value += sqlite3_value_double(argv[1]);
+      break;
+    }
+  }
+  if( setAux ){
+    sqlite3_set_auxdata(context, 0, saved_value, (void(*)(void*))sqlite3_free);
+  }
+  sqlite3_result_double(context, saved_value->value);
+}
+
+/*
 ** This function registered all of the above C functions as SQL
 ** functions.  This should be the only routine in this file with
 ** external linkage.
@@ -2239,6 +2292,7 @@ int RegisterExtensionFunctions(sqlite3 *db){
     { "padr",               2, 0, SQLITE_UTF8,    0, padrFunc },
     { "padc",               2, 0, SQLITE_UTF8,    0, padcFunc },
     { "strfilter",          2, 0, SQLITE_UTF8,    0, strfilterFunc },
+    { "accumulate",         2, 0, SQLITE_UTF8,    0, accumulateFunc },
 
   };
   /* Aggregate functions */

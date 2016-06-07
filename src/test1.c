@@ -1271,7 +1271,7 @@ static int sqlite3_mprintf_int64(
     return TCL_ERROR;
   }
   for(i=2; i<5; i++){
-    if( sqlite3Atoi64(argv[i], &a[i-2], 1000000, SQLITE_UTF8) ){
+    if( sqlite3Atoi64(argv[i], &a[i-2], sqlite3Strlen30(argv[i]), SQLITE_UTF8) ){
       Tcl_AppendResult(interp, "argument is not a valid 64-bit integer", 0);
       return TCL_ERROR;
     }
@@ -5213,7 +5213,9 @@ static int vfs_unregister_all(
 /*
 ** tclcmd:   vfs_reregister_all
 **
-** Restore all VFSes that were removed using vfs_unregister_all
+** Restore all VFSes that were removed using vfs_unregister_all. Taking
+** care to put the linked list back together in the same order as it was
+** in before vfs_unregister_all was invoked.
 */
 static int vfs_reregister_all(
   ClientData clientData, /* Pointer to sqlite3_enable_XXX function */
@@ -5222,8 +5224,8 @@ static int vfs_reregister_all(
   Tcl_Obj *CONST objv[]  /* Command arguments */
 ){
   int i;
-  for(i=0; i<nVfs; i++){
-    sqlite3_vfs_register(apVfs[i], i==0);
+  for(i=nVfs-1; i>=0; i--){
+    sqlite3_vfs_register(apVfs[i], 1);
   }
   return TCL_OK;
 }
@@ -6582,6 +6584,7 @@ static int tclLoadStaticExtensionCmd(
 ){
   extern int sqlite3_amatch_init(sqlite3*,char**,const sqlite3_api_routines*);
   extern int sqlite3_closure_init(sqlite3*,char**,const sqlite3_api_routines*);
+  extern int sqlite3_csv_init(sqlite3*,char**,const sqlite3_api_routines*);
   extern int sqlite3_eval_init(sqlite3*,char**,const sqlite3_api_routines*);
   extern int sqlite3_fileio_init(sqlite3*,char**,const sqlite3_api_routines*);
   extern int sqlite3_fuzzer_init(sqlite3*,char**,const sqlite3_api_routines*);
@@ -6599,6 +6602,7 @@ static int tclLoadStaticExtensionCmd(
   } aExtension[] = {
     { "amatch",                sqlite3_amatch_init               },
     { "closure",               sqlite3_closure_init              },
+    { "csv",                   sqlite3_csv_init                  },
     { "eval",                  sqlite3_eval_init                 },
     { "fileio",                sqlite3_fileio_init               },
     { "fuzzer",                sqlite3_fuzzer_init               },
@@ -6698,8 +6702,8 @@ static int sorter_test_sort4_helper(
   const char *zSql2;
   int nStep; 
   int iStep; 
-  int iCksum1 = 0; 
-  int iCksum2 = 0; 
+  unsigned int iCksum1 = 0; 
+  unsigned int iCksum2 = 0; 
   int rc;
   int iB;
   sqlite3 *db;
@@ -6726,7 +6730,7 @@ static int sorter_test_sort4_helper(
       return TCL_ERROR;
     }
 
-    iCksum1 += (iCksum1 << 3) + a;
+    iCksum1 += (iCksum1 << 3) + (unsigned int)a;
   }
   rc = sqlite3_finalize(pStmt);
   if( rc!=SQLITE_OK ) goto sql_error;
@@ -6735,7 +6739,7 @@ static int sorter_test_sort4_helper(
   if( rc!=SQLITE_OK ) goto sql_error;
   for(iStep=0; SQLITE_ROW==sqlite3_step(pStmt); iStep++){
     int a = sqlite3_column_int(pStmt, 0);
-    iCksum2 += (iCksum2 << 3) + a;
+    iCksum2 += (iCksum2 << 3) + (unsigned int)a;
   }
   rc = sqlite3_finalize(pStmt);
   if( rc!=SQLITE_OK ) goto sql_error;
@@ -6988,6 +6992,7 @@ static int test_sqlite3_db_config(
     { "FKEY",            SQLITE_DBCONFIG_ENABLE_FKEY },
     { "TRIGGER",         SQLITE_DBCONFIG_ENABLE_TRIGGER },
     { "FTS3_TOKENIZER",  SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER },
+    { "LOAD_EXTENSION",  SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION },
   };
   int i;
   int v;

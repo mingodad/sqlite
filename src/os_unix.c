@@ -405,7 +405,7 @@ static struct unix_syscall {
 #else
   { "pread64",      (sqlite3_syscall_ptr)0,          0  },
 #endif
-#define osPread64   ((ssize_t(*)(int,void*,size_t,off_t))aSyscall[10].pCurrent)
+#define osPread64 ((ssize_t(*)(int,void*,size_t,off64_t))aSyscall[10].pCurrent)
 
   { "write",        (sqlite3_syscall_ptr)write,      0  },
 #define osWrite     ((ssize_t(*)(int,const void*,size_t))aSyscall[11].pCurrent)
@@ -423,7 +423,7 @@ static struct unix_syscall {
 #else
   { "pwrite64",     (sqlite3_syscall_ptr)0,          0  },
 #endif
-#define osPwrite64  ((ssize_t(*)(int,const void*,size_t,off_t))\
+#define osPwrite64  ((ssize_t(*)(int,const void*,size_t,off64_t))\
                     aSyscall[13].pCurrent)
 
   { "fchmod",       (sqlite3_syscall_ptr)fchmod,          0  },
@@ -4288,10 +4288,12 @@ static int unixOpenSharedMemory(unixFile *pDbFd){
     pShmNode->h = -1;
     pDbFd->pInode->pShmNode = pShmNode;
     pShmNode->pInode = pDbFd->pInode;
-    pShmNode->mutex = sqlite3_mutex_alloc(SQLITE_MUTEX_FAST);
-    if( pShmNode->mutex==0 ){
-      rc = SQLITE_NOMEM_BKPT;
-      goto shm_open_err;
+    if( sqlite3GlobalConfig.bCoreMutex ){
+      pShmNode->mutex = sqlite3_mutex_alloc(SQLITE_MUTEX_FAST);
+      if( pShmNode->mutex==0 ){
+        rc = SQLITE_NOMEM_BKPT;
+        goto shm_open_err;
+      }
     }
 
     if( pInode->bProcessLock==0 ){
@@ -5410,20 +5412,24 @@ static const char *unixTempFileDir(void){
      "/tmp",
      "."
   };
-  unsigned int i;
+  unsigned int i = 0;
   struct stat buf;
   const char *zDir = sqlite3_temp_directory;
 
   if( !azDirs[0] ) azDirs[0] = getenv("SQLITE_TMPDIR");
   if( !azDirs[1] ) azDirs[1] = getenv("TMPDIR");
-  for(i=0; i<sizeof(azDirs)/sizeof(azDirs[0]); zDir=azDirs[i++]){
-    if( zDir==0 ) continue;
-    if( osStat(zDir, &buf) ) continue;
-    if( !S_ISDIR(buf.st_mode) ) continue;
-    if( osAccess(zDir, 07) ) continue;
-    break;
+  while(1){
+    if( zDir!=0
+     && osStat(zDir, &buf)==0
+     && S_ISDIR(buf.st_mode)
+     && osAccess(zDir, 03)==0
+    ){
+      return zDir;
+    }
+    if( i>=sizeof(azDirs)/sizeof(azDirs[0]) ) break;
+    zDir = azDirs[i++];
   }
-  return zDir;
+  return 0;
 }
 
 /*
@@ -5439,9 +5445,11 @@ static int unixGetTempname(int nBuf, char *zBuf){
   ** using the io-error infrastructure to test that SQLite handles this
   ** function failing. 
   */
+  zBuf[0] = 0;
   SimulateIOError( return SQLITE_IOERR );
 
   zDir = unixTempFileDir();
+  if( zDir==0 ) return SQLITE_IOERR_GETTEMPPATH;
   do{
     u64 r;
     sqlite3_randomness(sizeof(r), &r);

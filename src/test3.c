@@ -385,8 +385,7 @@ static int btree_payload_size(
   const char **argv      /* Text of each argument */
 ){
   BtCursor *pCur;
-  int n2;
-  u64 n1;
+  u32 n;
   char zBuf[50];
 
   if( argc!=2 ){
@@ -396,17 +395,9 @@ static int btree_payload_size(
   }
   pCur = sqlite3TestTextToPtr(argv[1]);
   sqlite3BtreeEnter(pCur->pBtree);
-
-  /* The cursor may be in "require-seek" state. If this is the case, the
-  ** call to BtreeDataSize() will fix it. */
-  sqlite3BtreeDataSize(pCur, (u32*)&n2);
-  if( pCur->apPage[pCur->iPage]->intKey ){
-    n1 = 0;
-  }else{
-    sqlite3BtreeKeySize(pCur, (i64*)&n1);
-  }
+  n = sqlite3BtreePayloadSize(pCur);
   sqlite3BtreeLeave(pCur->pBtree);
-  sqlite3_snprintf(sizeof(zBuf),zBuf, "%d", (int)(n1+n2));
+  sqlite3_snprintf(sizeof(zBuf),zBuf, "%u", n);
   Tcl_AppendResult(interp, zBuf, 0);
   return SQLITE_OK;
 }
@@ -547,7 +538,7 @@ static int btree_from_db(
 /*
 ** Usage:   btree_ismemdb ID
 **
-** Return true if the B-Tree is in-memory.
+** Return true if the B-Tree is currently stored entirely in memory.
 */
 static int btree_ismemdb(
   void *NotUsed,
@@ -557,6 +548,7 @@ static int btree_ismemdb(
 ){
   Btree *pBt;
   int res;
+  sqlite3_file *pFile;
 
   if( argc!=2 ){
     Tcl_AppendResult(interp, "wrong # args: should be \"", argv[0],
@@ -566,7 +558,8 @@ static int btree_ismemdb(
   pBt = sqlite3TestTextToPtr(argv[1]);
   sqlite3_mutex_enter(pBt->db->mutex);
   sqlite3BtreeEnter(pBt);
-  res = sqlite3PagerIsMemdb(sqlite3BtreePager(pBt));
+  pFile = sqlite3PagerFile(sqlite3BtreePager(pBt));
+  res = (pFile->pMethods==0);
   sqlite3BtreeLeave(pBt);
   sqlite3_mutex_leave(pBt->db->mutex);
   Tcl_SetObjResult(interp, Tcl_NewBooleanObj(res));
@@ -616,27 +609,27 @@ static int btree_insert(
 ){
   BtCursor *pCur;
   int rc;
-  void *pKey = 0;
-  int nKey = 0;
-  void *pData = 0;
-  int nData = 0;
+  BtreePayload x;
 
   if( objc!=4 && objc!=3 ){
     Tcl_WrongNumArgs(interp, 1, objv, "?-intkey? CSR KEY VALUE");
     return TCL_ERROR;
   }
 
+  memset(&x, 0, sizeof(x));
   if( objc==4 ){
-    if( Tcl_GetIntFromObj(interp, objv[2], &nKey) ) return TCL_ERROR;
-    pData = (void*)Tcl_GetByteArrayFromObj(objv[3], &nData);
+    if( Tcl_GetIntFromObj(interp, objv[2], &rc) ) return TCL_ERROR;
+    x.nKey = rc;
+    x.pData = (void*)Tcl_GetByteArrayFromObj(objv[3], &x.nData);
   }else{
-    pKey = (void*)Tcl_GetByteArrayFromObj(objv[2], &nKey);
+    x.pKey = (void*)Tcl_GetByteArrayFromObj(objv[2], &rc);
+    x.nKey = rc;
   }
   pCur = (BtCursor*)sqlite3TestTextToPtr(Tcl_GetString(objv[1]));
 
   sqlite3_mutex_enter(pCur->pBtree->db->mutex);
   sqlite3BtreeEnter(pCur->pBtree);
-  rc = sqlite3BtreeInsert(pCur, pKey, nKey, pData, nData, 0, 0, 0);
+  rc = sqlite3BtreeInsert(pCur, &x, 0, 0);
   sqlite3BtreeLeave(pCur->pBtree);
   sqlite3_mutex_leave(pCur->pBtree->db->mutex);
 

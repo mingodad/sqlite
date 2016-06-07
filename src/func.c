@@ -785,7 +785,7 @@ static int patternCompare(
     }
     c2 = Utf8Read(zString);
     if( c==c2 ) continue;
-    if( noCase && c<0x80 && c2<0x80 && sqlite3Tolower(c)==sqlite3Tolower(c2) ){
+    if( noCase  && sqlite3Tolower(c)==sqlite3Tolower(c2) && c<0x80 && c2<0x80 ){
       continue;
     }
     if( c==matchOne && zPattern!=zEscaped && c2!=0 ) continue;
@@ -1430,6 +1430,14 @@ static void loadExt(sqlite3_context *context, int argc, sqlite3_value **argv){
   const char *zProc;
   sqlite3 *db = sqlite3_context_db_handle(context);
   char *zErrMsg = 0;
+
+  /* Disallow the load_extension() SQL function unless the SQLITE_LoadExtFunc
+  ** flag is set.  See the sqlite3_enable_load_extension() API.
+  */
+  if( (db->flags & SQLITE_LoadExtFunc)==0 ){
+    sqlite3_result_error(context, "not authorized", -1);
+    return;
+  }
 
   if( argc==2 ){
     zProc = (const char *)sqlite3_value_text(argv[1]);

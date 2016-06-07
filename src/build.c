@@ -592,15 +592,9 @@ void sqlite3DeleteColumnNames(sqlite3 *db, Table *pTable){
 ** db parameter can be used with db->pnBytesFreed to measure the memory
 ** used by the Table object.
 */
-void sqlite3DeleteTable(sqlite3 *db, Table *pTable){
+static void SQLITE_NOINLINE deleteTable(sqlite3 *db, Table *pTable){
   Index *pIndex, *pNext;
   TESTONLY( int nLookaside; ) /* Used to verify lookaside not used for schema */
-
-  assert( !pTable || pTable->nRef>0 );
-
-  /* Do not delete the table until the reference count reaches zero. */
-  if( !pTable ) return;
-  if( ((!db || db->pnBytesFreed==0) && (--pTable->nRef)>0) ) return;
 
   /* Record the number of outstanding lookaside allocations in schema Tables
   ** prior to doing any free() operations.  Since schema Tables do not use
@@ -611,8 +605,9 @@ void sqlite3DeleteTable(sqlite3 *db, Table *pTable){
   /* Delete all indices associated with this table. */
   for(pIndex = pTable->pIndex; pIndex; pIndex=pNext){
     pNext = pIndex->pNext;
-    assert( pIndex->pSchema==pTable->pSchema );
-    if( !db || db->pnBytesFreed==0 ){
+    assert( pIndex->pSchema==pTable->pSchema
+         || (IsVirtual(pTable) && pIndex->idxType!=SQLITE_IDXTYPE_APPDEF) );
+    if( (db==0 || db->pnBytesFreed==0) && !IsVirtual(pTable) ){
       char *zName = pIndex->zName; 
       TESTONLY ( Index *pOld = ) sqlite3HashInsert(
          &pIndex->pSchema->idxHash, zName, 0
@@ -641,6 +636,13 @@ void sqlite3DeleteTable(sqlite3 *db, Table *pTable){
   /* Verify that no lookaside memory was used by schema tables */
   assert( nLookaside==0 || nLookaside==db->lookaside.nOut );
 }
+void sqlite3DeleteTable(sqlite3 *db, Table *pTable){
+  /* Do not delete the table until the reference count reaches zero. */
+  if( !pTable ) return;
+  if( ((!db || db->pnBytesFreed==0) && (--pTable->nRef)>0) ) return;
+  deleteTable(db, pTable);
+}
+
 
 /*
 ** Unlink the given table from the hash tables and the delete the
@@ -1086,6 +1088,7 @@ void sqlite3AddColumn(Parse *pParse, Token *pName, Token *pType){
     zType = z + sqlite3Strlen30(z) + 1;
     memcpy(zType, pType->z, pType->n);
     zType[pType->n] = 0;
+    sqlite3Dequote(zType);
     pCol->affinity = sqlite3AffinityType(zType, &pCol->szEst);
     pCol->colFlags |= COLFLAG_HASTYPE;
   }
@@ -1286,7 +1289,7 @@ void sqlite3AddPrimaryKey(
   Column *pCol = 0;
   int iCol = -1, i;
   int nTerm;
-  if( pTab==0 || IN_DECLARE_VTAB ) goto primary_key_exit;
+  if( pTab==0 ) goto primary_key_exit;
   if( pTab->tabFlags & TF_HasPrimaryKey ){
     sqlite3ErrorMsg(pParse, 
       "table \"%s\" has more than one primary key", pTab->zName);
@@ -1332,12 +1335,8 @@ void sqlite3AddPrimaryKey(
        "INTEGER PRIMARY KEY");
 #endif
   }else{
-    Index *p;
-    p = sqlite3CreateIndex(pParse, 0, 0, 0, pList, onError, 0,
-                           0, sortOrder, 0);
-    if( p ){
-      p->idxType = SQLITE_IDXTYPE_PRIMARYKEY;
-    }
+    sqlite3CreateIndex(pParse, 0, 0, 0, pList, onError, 0,
+                           0, sortOrder, 0, SQLITE_IDXTYPE_PRIMARYKEY);
     pList = 0;
   }
 
@@ -1654,21 +1653,23 @@ static int hasColumn(const i16 *aiCol, int nCol, int x){
 ** are appropriate for a WITHOUT ROWID table instead of a rowid table.
 ** Changes include:
 **
-**     (1)  Convert the OP_CreateTable into an OP_CreateIndex.  There is
+**     (1)  Set all columns of the PRIMARY KEY schema object to be NOT NULL.
+**     (2)  Convert the OP_CreateTable into an OP_CreateIndex.  There is
 **          no rowid btree for a WITHOUT ROWID.  Instead, the canonical
 **          data storage is a covering index btree.
-**     (2)  Bypass the creation of the sqlite_master table entry
+**     (3)  Bypass the creation of the sqlite_master table entry
 **          for the PRIMARY KEY as the primary key index is now
 **          identified by the sqlite_master table entry of the table itself.
-**     (3)  Set the Index.tnum of the PRIMARY KEY Index object in the
+**     (4)  Set the Index.tnum of the PRIMARY KEY Index object in the
 **          schema to the rootpage from the main table.
-**     (4)  Set all columns of the PRIMARY KEY schema object to be NOT NULL.
 **     (5)  Add all table columns to the PRIMARY KEY Index object
 **          so that the PRIMARY KEY is a covering index.  The surplus
 **          columns are part of KeyInfo.nXField and are not used for
 **          sorting or lookup or uniqueness checks.
 **     (6)  Replace the rowid tail on all automatically generated UNIQUE
 **          indices with the PRIMARY KEY columns.
+**
+** For virtual tables, only (1) is performed.
 */
 static void convertToWithoutRowidTable(Parse *pParse, Table *pTab){
   Index *pIdx;
@@ -1677,6 +1678,20 @@ static void convertToWithoutRowidTable(Parse *pParse, Table *pTab){
   int i, j;
   sqlite3 *db = pParse->db;
   Vdbe *v = pParse->pVdbe;
+
+  /* Mark every PRIMARY KEY column as NOT NULL (except for imposter tables)
+  */
+  if( !db->init.imposterTable ){
+    for(i=0; i<pTab->nCol; i++){
+      if( (pTab->aCol[i].colFlags & COLFLAG_PRIMKEY)!=0 ){
+        pTab->aCol[i].notNull = OE_Abort;
+      }
+    }
+  }
+
+  /* The remaining transformations only apply to b-tree tables, not to
+  ** virtual tables */
+  if( IN_DECLARE_VTAB ) return;
 
   /* Convert the OP_CreateTable opcode that would normally create the
   ** root-page for the table into an OP_CreateIndex opcode.  The index
@@ -1699,9 +1714,10 @@ static void convertToWithoutRowidTable(Parse *pParse, Table *pTab){
     if( pList==0 ) return;
     pList->a[0].sortOrder = pParse->iPkSortOrder;
     assert( pParse->pNewTable==pTab );
-    pPk = sqlite3CreateIndex(pParse, 0, 0, 0, pList, pTab->keyConf, 0, 0, 0, 0);
-    if( pPk==0 ) return;
-    pPk->idxType = SQLITE_IDXTYPE_PRIMARYKEY;
+    sqlite3CreateIndex(pParse, 0, 0, 0, pList, pTab->keyConf, 0, 0, 0, 0,
+                       SQLITE_IDXTYPE_PRIMARYKEY);
+    if( db->mallocFailed ) return;
+    pPk = sqlite3PrimaryKeyIndex(pTab);
     pTab->iPKey = -1;
   }else{
     pPk = sqlite3PrimaryKeyIndex(pTab);
@@ -1729,18 +1745,10 @@ static void convertToWithoutRowidTable(Parse *pParse, Table *pTab){
     }
     pPk->nKeyCol = j;
   }
-  pPk->isCovering = 1;
   assert( pPk!=0 );
+  pPk->isCovering = 1;
+  if( !db->init.imposterTable ) pPk->uniqNotNull = 1;
   nPk = pPk->nKeyCol;
-
-  /* Make sure every column of the PRIMARY KEY is NOT NULL.  (Except,
-  ** do not enforce this for imposter tables.) */
-  if( !db->init.imposterTable ){
-    for(i=0; i<nPk; i++){
-      pTab->aCol[pPk->aiColumn[i]].notNull = OE_Abort;
-    }
-    pPk->uniqNotNull = 1;
-  }
 
   /* The root page of the PRIMARY KEY is the table root page */
   pPk->tnum = pTab->tnum;
@@ -2244,7 +2252,7 @@ int sqlite3ViewGetColumnNames(Parse *pParse, Table *pTable){
       pTable->nCol = 0;
       nErr++;
     }
-    if( pSelTab ) sqlite3DeleteTable(db, pSelTab);
+    sqlite3DeleteTable(db, pSelTab);
     sqlite3SelectDelete(db, pSel);
     db->lookaside.bDisable--;
   } else {
@@ -2890,12 +2898,8 @@ Index *sqlite3AllocateIndexObject(
 ** pList is a list of columns to be indexed.  pList will be NULL if this
 ** is a primary key or unique-constraint on the most recent column added
 ** to the table currently under construction.  
-**
-** If the index is created successfully, return a pointer to the new Index
-** structure. This is used by sqlite3AddPrimaryKey() to mark the index
-** as the tables primary key (Index.idxType==SQLITE_IDXTYPE_PRIMARYKEY)
 */
-Index *sqlite3CreateIndex(
+void sqlite3CreateIndex(
   Parse *pParse,     /* All information about this parse */
   Token *pName1,     /* First part of index name. May be NULL */
   Token *pName2,     /* Second part of index name. May be NULL */
@@ -2905,9 +2909,9 @@ Index *sqlite3CreateIndex(
   Token *pStart,     /* The CREATE token that begins this statement */
   Expr *pPIWhere,    /* WHERE clause for partial indices */
   int sortOrder,     /* Sort order of primary key when pList==NULL */
-  int ifNotExist     /* Omit error if index already exists */
+  int ifNotExist,    /* Omit error if index already exists */
+  u8 idxType         /* The index type */
 ){
-  Index *pRet = 0;     /* Pointer to return */
   Table *pTab = 0;     /* Table to be indexed */
   Index *pIndex = 0;   /* The index to be created */
   char *zName = 0;     /* Name of the index */
@@ -2925,7 +2929,10 @@ Index *sqlite3CreateIndex(
   char *zExtra = 0;                /* Extra space after the Index object */
   Index *pPk = 0;      /* PRIMARY KEY index for WITHOUT ROWID tables */
 
-  if( db->mallocFailed || IN_DECLARE_VTAB || pParse->nErr>0 ){
+  if( db->mallocFailed || pParse->nErr>0 ){
+    goto exit_create_index;
+  }
+  if( IN_DECLARE_VTAB && idxType!=SQLITE_IDXTYPE_PRIMARYKEY ){
     goto exit_create_index;
   }
   if( SQLITE_OK!=sqlite3ReadSchema(pParse) ){
@@ -3114,7 +3121,7 @@ Index *sqlite3CreateIndex(
   pIndex->pTable = pTab;
   pIndex->onError = (u8)onError;
   pIndex->uniqNotNull = onError!=OE_None;
-  pIndex->idxType = pName ? SQLITE_IDXTYPE_APPDEF : SQLITE_IDXTYPE_UNIQUE;
+  pIndex->idxType = idxType;
   pIndex->pSchema = db->aDb[iDb].pSchema;
   pIndex->nKeyCol = pList->nExpr;
   if( pPIWhere ){
@@ -3294,7 +3301,7 @@ Index *sqlite3CreateIndex(
             pIdx->onError = pIndex->onError;
           }
         }
-        pRet = pIdx;
+        if( idxType==SQLITE_IDXTYPE_PRIMARYKEY ) pIdx->idxType = idxType;
         goto exit_create_index;
       }
     }
@@ -3306,6 +3313,7 @@ Index *sqlite3CreateIndex(
   assert( pParse->nErr==0 );
   if( db->init.busy ){
     Index *p;
+    assert( !IN_DECLARE_VTAB );
     assert( sqlite3SchemaMutexHeld(db, 0, pIndex->pSchema) );
     p = sqlite3HashInsert(&pIndex->pSchema->idxHash, 
                           pIndex->zName, pIndex);
@@ -3387,7 +3395,7 @@ Index *sqlite3CreateIndex(
       sqlite3ChangeCookie(pParse, iDb);
       sqlite3VdbeAddParseSchemaOp(v, iDb,
          sqlite3MPrintf(db, "name='%q' AND type='index'", pIndex->zName));
-      sqlite3VdbeAddOp1(v, OP_Expire, 0);
+      sqlite3VdbeAddOp0(v, OP_Expire);
     }
 
     sqlite3VdbeJumpHere(v, pIndex->tnum);
@@ -3412,7 +3420,6 @@ Index *sqlite3CreateIndex(
       pIndex->pNext = pOther->pNext;
       pOther->pNext = pIndex;
     }
-    pRet = pIndex;
     pIndex = 0;
   }
 
@@ -3423,7 +3430,6 @@ exit_create_index:
   sqlite3ExprListDelete(db, pList);
   sqlite3SrcListDelete(db, pTblName);
   sqlite3DbFree(db, zName);
-  return pRet;
 }
 
 /*
@@ -4336,10 +4342,6 @@ void sqlite3Reindex(Parse *pParse, Token *pName1, Token *pName2){
 
 /*
 ** Return a KeyInfo structure that is appropriate for the given Index.
-**
-** The KeyInfo structure for an index is cached in the Index object.
-** So there might be multiple references to the returned pointer.  The
-** caller should not try to modify the KeyInfo object.
 **
 ** The caller should invoke sqlite3KeyInfoUnref() on the returned object
 ** when it has finished using it.

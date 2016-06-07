@@ -1030,7 +1030,7 @@ void sqlite3Pragma(
       ** compiler (eg. count_changes). So add an opcode to expire all
       ** compiled SQL statements after modifying a pragma value.
       */
-      sqlite3VdbeAddOp2(v, OP_Expire, 0, 0);
+      sqlite3VdbeAddOp0(v, OP_Expire);
       setAllPagerFlags(db);
     }
     break;
@@ -1339,7 +1339,7 @@ void sqlite3Pragma(
           }else{
             sqlite3VdbeAddOp2(v, OP_Rowid, 0, regRow);
           }
-          sqlite3VdbeAddOp3(v, OP_NotExists, i, 0, regRow); VdbeCoverage(v);
+          sqlite3VdbeAddOp3(v, OP_SeekRowid, i, 0, regRow); VdbeCoverage(v);
           sqlite3VdbeGoto(v, addrOk);
           sqlite3VdbeJumpHere(v, sqlite3VdbeCurrentAddr(v)-2);
         }else{

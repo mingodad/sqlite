@@ -126,7 +126,7 @@ int sqlite3WhereExplainOneScan(
 
     pLoop = pLevel->pWLoop;
     flags = pLoop->wsFlags;
-    if( (flags&WHERE_MULTI_OR) || (wctrlFlags&WHERE_ONETABLE_ONLY) ) return 0;
+    if( (flags&WHERE_MULTI_OR) || (wctrlFlags&WHERE_OR_SUBCLAUSE) ) return 0;
 
     isSearch = (flags&(WHERE_BTM_LIMIT|WHERE_TOP_LIMIT))!=0
             || ((flags&WHERE_VIRTUALTABLE)==0 && (pLoop->u.btree.nEq>0))
@@ -560,9 +560,10 @@ static int codeAllEqualityTerms(
 
 #ifndef SQLITE_LIKE_DOESNT_MATCH_BLOBS
 /*
-** If the most recently coded instruction is a constant range contraint
-** that originated from the LIKE optimization, then change the P3 to be
-** pLoop->iLikeRepCntr and set P5.
+** If the most recently coded instruction is a constant range constraint
+** (a string literal) that originated from the LIKE optimization, then 
+** set P3 and P5 on the OP_String opcode so that the string will be cast
+** to a BLOB at appropriate times.
 **
 ** The LIKE optimization trys to evaluate "x LIKE 'abc%'" as a range
 ** expression: "x>='ABC' AND x<'abd'".  But this requires that the range
@@ -587,8 +588,8 @@ static void whereLikeOptimizationStringFixup(
     assert( pOp!=0 );
     assert( pOp->opcode==OP_String8 
             || pTerm->pWC->pWInfo->pParse->db->mallocFailed );
-    pOp->p3 = pLevel->iLikeRepCntr;
-    pOp->p5 = 1;
+    pOp->p3 = (int)(pLevel->iLikeRepCntr>>1);  /* Register holding counter */
+    pOp->p5 = (u8)(pLevel->iLikeRepCntr&1);    /* ASC or DESC */
   }
 }
 #else
@@ -775,7 +776,7 @@ static void codeDeferredSeek(
   assert( pIdx->aiColumn[pIdx->nColumn-1]==-1 );
   
   sqlite3VdbeAddOp3(v, OP_Seek, iIdxCur, 0, iCur);
-  if( (pWInfo->wctrlFlags & WHERE_FORCE_TABLE)
+  if( (pWInfo->wctrlFlags & WHERE_OR_SUBCLAUSE)
    && DbMaskAllZero(sqlite3ParseToplevel(pParse)->writeMask)
   ){
     int i;
@@ -830,7 +831,7 @@ Bitmask sqlite3WhereCodeOneLoopStart(
   pLevel->notReady = notReady & ~sqlite3WhereGetMask(&pWInfo->sMaskSet, iCur);
   bRev = (pWInfo->revMask>>iLevel)&1;
   omitTable = (pLoop->wsFlags & WHERE_IDX_ONLY)!=0 
-           && (pWInfo->wctrlFlags & WHERE_FORCE_TABLE)==0;
+           && (pWInfo->wctrlFlags & WHERE_OR_SUBCLAUSE)==0;
   VdbeModuleComment((v, "Begin WHERE-loop%d: %s",iLevel,pTabItem->pTab->zName));
 
   /* Create labels for the "break" and "continue" instructions
@@ -970,8 +971,7 @@ Bitmask sqlite3WhereCodeOneLoopStart(
     iRowidReg = codeEqualityTerm(pParse, pTerm, pLevel, 0, bRev, iReleaseReg);
     if( iRowidReg!=iReleaseReg ) sqlite3ReleaseTempReg(pParse, iReleaseReg);
     addrNxt = pLevel->addrNxt;
-    sqlite3VdbeAddOp2(v, OP_MustBeInt, iRowidReg, addrNxt); VdbeCoverage(v);
-    sqlite3VdbeAddOp3(v, OP_NotExists, iCur, addrNxt, iRowidReg);
+    sqlite3VdbeAddOp3(v, OP_SeekRowid, iCur, addrNxt, iRowidReg);
     VdbeCoverage(v);
     sqlite3ExprCacheAffinityChange(pParse, iRowidReg, 1);
     sqlite3ExprCacheStore(pParse, iCur, -1, iRowidReg);
@@ -1175,14 +1175,17 @@ Bitmask sqlite3WhereCodeOneLoopStart(
       if( (pRangeEnd->wtFlags & TERM_LIKEOPT)!=0 ){
         assert( pRangeStart!=0 );                     /* LIKE opt constraints */
         assert( pRangeStart->wtFlags & TERM_LIKEOPT );   /* occur in pairs */
-        pLevel->iLikeRepCntr = ++pParse->nMem;
-        testcase( bRev );
-        testcase( pIdx->aSortOrder[nEq]==SQLITE_SO_DESC );
-        sqlite3VdbeAddOp2(v, OP_Integer,
-                          bRev ^ (pIdx->aSortOrder[nEq]==SQLITE_SO_DESC),
-                          pLevel->iLikeRepCntr);
+        pLevel->iLikeRepCntr = (u32)++pParse->nMem;
+        sqlite3VdbeAddOp2(v, OP_Integer, 1, (int)pLevel->iLikeRepCntr);
         VdbeComment((v, "LIKE loop counter"));
         pLevel->addrLikeRep = sqlite3VdbeCurrentAddr(v);
+        /* iLikeRepCntr actually stores 2x the counter register number.  The
+        ** bottom bit indicates whether the search order is ASC or DESC. */
+        testcase( bRev );
+        testcase( pIdx->aSortOrder[nEq]==SQLITE_SO_DESC );
+        assert( (bRev & ~1)==0 );
+        pLevel->iLikeRepCntr <<=1;
+        pLevel->iLikeRepCntr |= bRev ^ (pIdx->aSortOrder[nEq]==SQLITE_SO_DESC);
       }
 #endif
       if( pRangeStart==0
@@ -1320,7 +1323,7 @@ Bitmask sqlite3WhereCodeOneLoopStart(
     if( omitTable ){
       /* pIdx is a covering index.  No need to access the main table. */
     }else if( HasRowid(pIdx->pTable) ){
-      if( pWInfo->eOnePass!=ONEPASS_OFF ){
+      if( (pWInfo->wctrlFlags & WHERE_SEEK_TABLE)!=0 ){
         iRowidReg = ++pParse->nMem;
         sqlite3VdbeAddOp2(v, OP_IdxRowid, iIdxCur, iRowidReg);
         sqlite3ExprCacheStore(pParse, iCur, -1, iRowidReg);
@@ -1513,10 +1516,7 @@ Bitmask sqlite3WhereCodeOneLoopStart(
     ** eliminating duplicates from other WHERE clauses, the action for each
     ** sub-WHERE clause is to to invoke the main loop body as a subroutine.
     */
-    wctrlFlags =  WHERE_OMIT_OPEN_CLOSE
-                | WHERE_FORCE_TABLE
-                | WHERE_ONETABLE_ONLY
-                | WHERE_NO_AUTOINDEX;
+    wctrlFlags =  WHERE_OR_SUBCLAUSE | (pWInfo->wctrlFlags & WHERE_SEEK_TABLE);
     for(ii=0; ii<pOrWc->nTerm; ii++){
       WhereTerm *pOrTerm = &pOrWc->a[ii];
       if( pOrTerm->leftCursor==iCur || (pOrTerm->eOperator & WO_AND)!=0 ){
@@ -1624,7 +1624,6 @@ Bitmask sqlite3WhereCodeOneLoopStart(
           ){
             assert( pSubWInfo->a[0].iIdxCur==iCovCur );
             pCov = pSubLoop->u.btree.pIndex;
-            wctrlFlags |= WHERE_REOPEN_IDX;
           }else{
             pCov = 0;
           }
@@ -1686,7 +1685,7 @@ Bitmask sqlite3WhereCodeOneLoopStart(
     if( pTerm->wtFlags & (TERM_VIRTUAL|TERM_CODED) ) continue;
     if( (pTerm->prereqAll & pLevel->notReady)!=0 ){
       testcase( pWInfo->untestedTerms==0
-               && (pWInfo->wctrlFlags & WHERE_ONETABLE_ONLY)!=0 );
+               && (pWInfo->wctrlFlags & WHERE_OR_SUBCLAUSE)!=0 );
       pWInfo->untestedTerms = 1;
       continue;
     }
@@ -1696,11 +1695,17 @@ Bitmask sqlite3WhereCodeOneLoopStart(
       continue;
     }
     if( pTerm->wtFlags & TERM_LIKECOND ){
+      /* If the TERM_LIKECOND flag is set, that means that the range search
+      ** is sufficient to guarantee that the LIKE operator is true, so we
+      ** can skip the call to the like(A,B) function.  But this only works
+      ** for strings.  So do not skip the call to the function on the pass
+      ** that compares BLOBs. */
 #ifdef SQLITE_LIKE_DOESNT_MATCH_BLOBS
       continue;
 #else
-      assert( pLevel->iLikeRepCntr>0 );
-      skipLikeAddr = sqlite3VdbeAddOp1(v, OP_IfNot, pLevel->iLikeRepCntr);
+      u32 x = pLevel->iLikeRepCntr;
+      assert( x>0 );
+      skipLikeAddr = sqlite3VdbeAddOp1(v, (x&1)? OP_IfNot : OP_If, (int)(x>>1));
       VdbeCoverage(v);
 #endif
     }

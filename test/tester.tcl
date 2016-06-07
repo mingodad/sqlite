@@ -521,7 +521,11 @@ if {[info exists cmdlinearg]==0} {
       }
 
       default {
-        lappend leftover [file normalize $a]
+        if {[file tail $a]==$a} {
+          lappend leftover $a
+        } else {
+          lappend leftover [file normalize $a]
+        }
       }
     }
   }
@@ -1942,6 +1946,12 @@ proc wal_check_journal_mode {testname {db db}} {
     $db eval { SELECT * FROM sqlite_master }
     do_test $testname [list $db eval "PRAGMA main.journal_mode"] {wal}
   }
+}
+
+proc wal_is_capable {} {
+  ifcapable !wal { return 0 }
+  if {[permutation]=="journaltest"} { return 0 }
+  return 1
 }
 
 proc permutation {} {

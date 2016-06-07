@@ -278,19 +278,18 @@ static int sessionVarintGet(u8 *aBuf, int *piVal){
   return getVarint32(aBuf, *piVal);
 }
 
+/* Load an unaligned and unsigned 32-bit integer */
+#define SESSION_UINT32(x) (((u32)(x)[0]<<24)|((x)[1]<<16)|((x)[2]<<8)|(x)[3])
+
 /*
 ** Read a 64-bit big-endian integer value from buffer aRec[]. Return
 ** the value read.
 */
 static sqlite3_int64 sessionGetI64(u8 *aRec){
-  return (((sqlite3_int64)aRec[0]) << 56)
-       + (((sqlite3_int64)aRec[1]) << 48)
-       + (((sqlite3_int64)aRec[2]) << 40)
-       + (((sqlite3_int64)aRec[3]) << 32)
-       + (((sqlite3_int64)aRec[4]) << 24)
-       + (((sqlite3_int64)aRec[5]) << 16)
-       + (((sqlite3_int64)aRec[6]) <<  8)
-       + (((sqlite3_int64)aRec[7]) <<  0);
+  u64 x = SESSION_UINT32(aRec);
+  u32 y = SESSION_UINT32(aRec+4);
+  x = (x<<32) + y;
+  return (sqlite3_int64)x;
 }
 
 /*
@@ -348,8 +347,8 @@ static int sessionSerializeValue(
           if( eType==SQLITE_INTEGER ){
             i = (u64)sqlite3_value_int64(pValue);
           }else{
-            double r;
-            assert( sizeof(double)==8 && sizeof(u64)==8 );
+            sqlite_double r;
+            assert( sizeof(sqlite_double)==8 && sizeof(u64)==8 );
             r = sqlite3_value_double(pValue);
             memcpy(&i, &r, 8);
           }
@@ -481,7 +480,7 @@ static int sessionPreupdateHash(
         if( eType==SQLITE_INTEGER ){
           iVal = sqlite3_value_int64(pVal);
         }else{
-          double rVal = sqlite3_value_double(pVal);
+          sqlite_double rVal = sqlite3_value_double(pVal);
           assert( sizeof(iVal)==8 && sizeof(rVal)==8 );
           memcpy(&iVal, &rVal, 8);
         }
@@ -592,14 +591,19 @@ static int sessionChangeEqual(
   int iCol;                       /* Used to iterate through table columns */
 
   for(iCol=0; iCol<pTab->nCol; iCol++){
-    int n1 = sessionSerialLen(a1);
-    int n2 = sessionSerialLen(a2);
+    if( pTab->abPK[iCol] ){
+      int n1 = sessionSerialLen(a1);
+      int n2 = sessionSerialLen(a2);
 
-    if( pTab->abPK[iCol] && (n1!=n2 || memcmp(a1, a2, n1)) ){
-      return 0;
+      if( pTab->abPK[iCol] && (n1!=n2 || memcmp(a1, a2, n1)) ){
+        return 0;
+      }
+      a1 += n1;
+      a2 += n2;
+    }else{
+      if( bLeftPkOnly==0 ) a1 += sessionSerialLen(a1);
+      if( bRightPkOnly==0 ) a2 += sessionSerialLen(a2);
     }
-    if( pTab->abPK[iCol] || bLeftPkOnly==0 ) a1 += n1;
-    if( pTab->abPK[iCol] || bRightPkOnly==0 ) a2 += n2;
   }
 
   return 1;
@@ -819,7 +823,7 @@ static int sessionPreupdateEqual(
         if( eType==SQLITE_INTEGER ){
           if( sqlite3_value_int64(pVal)!=iVal ) return 0;
         }else{
-          double rVal;
+          sqlite_double rVal;
           assert( sizeof(iVal)==8 && sizeof(rVal)==8 );
           memcpy(&rVal, &iVal, 8);
           if( sqlite3_value_double(pVal)!=rVal ) return 0;
@@ -1881,7 +1885,7 @@ static void sessionAppendCol(
       if( eType==SQLITE_INTEGER ){
         i = sqlite3_column_int64(pStmt, iCol);
       }else{
-        double r = sqlite3_column_double(pStmt, iCol);
+        sqlite_double r = sqlite3_column_double(pStmt, iCol);
         memcpy(&i, &r, 8);
       }
       sessionPutI64(aBuf, i);
@@ -1964,7 +1968,7 @@ static int sessionAppendUpdate(
           if( eType==SQLITE_INTEGER ){
             if( iVal==sqlite3_column_int64(pStmt, i) ) break;
           }else{
-            double dVal;
+            sqlite_double dVal;
             memcpy(&dVal, &iVal, 8);
             if( dVal==sqlite3_column_double(pStmt, i) ) break;
           }
@@ -2155,7 +2159,7 @@ static int sessionSelectBind(
 
       case SQLITE_FLOAT: {
         if( abPK[i] ){
-          double rVal;
+          sqlite_double rVal;
           i64 iVal = sessionGetI64(a);
           memcpy(&rVal, &iVal, 8);
           rc = sqlite3_bind_double(pSelect, i+1, rVal);
@@ -2650,7 +2654,7 @@ static int sessionReadRecord(
         if( eType==SQLITE_INTEGER ){
           sqlite3VdbeMemSetInt64(apOut[i], v);
         }else{
-          double d;
+          sqlite_double d;
           memcpy(&d, &v, 8);
           sqlite3VdbeMemSetDouble(apOut[i], d);
         }

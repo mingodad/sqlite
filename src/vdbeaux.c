@@ -791,7 +791,7 @@ void sqlite3VdbeJumpHere(Vdbe *p, int addr){
 ** the FuncDef is not ephermal, then do nothing.
 */
 static void freeEphemeralFunction(sqlite3 *db, FuncDef *pDef){
-  if( ALWAYS(pDef) && (pDef->funcFlags & SQLITE_FUNC_EPHEM)!=0 ){
+  if( (pDef->funcFlags & SQLITE_FUNC_EPHEM)!=0 ){
     sqlite3DbFree(db, pDef);
   }
 }
@@ -801,12 +801,20 @@ static void vdbeFreeOpArray(sqlite3 *, Op *, int);
 /*
 ** Delete a P4 value if necessary.
 */
+static SQLITE_NOINLINE void freeP4Mem(sqlite3 *db, Mem *p){
+  if( p->szMalloc ) sqlite3DbFree(db, p->zMalloc);
+  sqlite3DbFree(db, p);
+}
+static SQLITE_NOINLINE void freeP4FuncCtx(sqlite3 *db, sqlite3_context *p){
+  freeEphemeralFunction(db, p->pFunc);
+  sqlite3DbFree(db, p);
+}
 static void freeP4(sqlite3 *db, int p4type, void *p4){
   assert( db );
   switch( p4type ){
     case P4_FUNCCTX: {
-      freeEphemeralFunction(db, ((sqlite3_context*)p4)->pFunc);
-      /* Fall through into the next case */
+      freeP4FuncCtx(db, (sqlite3_context*)p4);
+      break;
     }
     case P4_REAL:
     case P4_INT64:
@@ -837,9 +845,7 @@ static void freeP4(sqlite3 *db, int p4type, void *p4){
       if( db->pnBytesFreed==0 ){
         sqlite3ValueFree((sqlite3_value*)p4);
       }else{
-        Mem *p = (Mem*)p4;
-        if( p->szMalloc ) sqlite3DbFree(db, p->zMalloc);
-        sqlite3DbFree(db, p);
+        freeP4Mem(db, (Mem*)p4);
       }
       break;
     }
@@ -4309,8 +4315,7 @@ int sqlite3VdbeIdxRowid(sqlite3 *db, BtCursor *pCur, i64 *rowid){
   ** this code can safely assume that nCellKey is 32-bits  
   */
   assert( sqlite3BtreeCursorIsValid(pCur) );
-  VVA_ONLY(rc =) sqlite3BtreeKeySize(pCur, &nCellKey);
-  assert( rc==SQLITE_OK );     /* pCur is always valid so KeySize cannot fail */
+  nCellKey = sqlite3BtreePayloadSize(pCur);
   assert( (nCellKey & SQLITE_MAX_U32)==(u64)nCellKey );
 
   /* Read in the complete content of the index entry */
@@ -4387,8 +4392,7 @@ int sqlite3VdbeIdxKeyCompare(
   assert( pC->eCurType==CURTYPE_BTREE );
   pCur = pC->uc.pCursor;
   assert( sqlite3BtreeCursorIsValid(pCur) );
-  VVA_ONLY(rc =) sqlite3BtreeKeySize(pCur, &nCellKey);
-  assert( rc==SQLITE_OK );    /* pCur is always valid so KeySize cannot fail */
+  nCellKey = sqlite3BtreePayloadSize(pCur);
   /* nCellKey will always be between 0 and 0xffffffff because of the way
   ** that btreeParseCellPtr() and sqlite3GetVarint32() are implemented */
   if( nCellKey<=0 || nCellKey>0x7fffffff ){

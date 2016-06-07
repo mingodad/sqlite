@@ -44,7 +44,8 @@ TCC += -D_HAVE_SQLITE_CONFIG_H -DBUILD_sqlite -DSQLITE_HAS_CODEC=1 \
 	-DSQLITE_USE_DECIMAL2=1 \
 	-DSQLITE_ENABLE_STAT4=1 -DCODEC_TYPE=CODEC_TYPE_AES2562 \
 	-DSQLITE_SOUNDEX=1 -DSQLITE_ENABLE_EXTENSION_FUNCTIONS=1 \
-	-DSQLITE_OMIT_PREPARED=1  -DSQLITE_ENABLE_SESSION=1
+	-DSQLITE_OMIT_PREPARED=1  \
+	-DSQLITE_ENABLE_SESSION=1 -DSQLITE_ENABLE_PREUPDATE_HOOK=1
 
 # Define -DNDEBUG to compile without debugging (i.e., for production usage)
 # Omitting the define will cause extra debugging code to be inserted and
@@ -90,7 +91,6 @@ TEMP_STORE = -DSQLITE_TEMP_STORE=@TEMP_STORE@
 # The same set of OMIT and ENABLE flags should be passed to the 
 # LEMON parser generator and the mkkeywordhash tool as well.
 OPT_FEATURE_FLAGS = @OPT_FEATURE_FLAGS@ -DSQLITE_OMIT_PREPARED=1
-OPT_FEATURE_FLAGS += -DSQLITE_ENABLE_SESSION -DSQLITE_ENABLE_PREUPDATE_HOOK
 
 TCC += $(OPT_FEATURE_FLAGS)
 
@@ -450,6 +450,7 @@ TESTSRC = \
 TESTSRC += \
   $(TOP)/ext/misc/amatch.c \
   $(TOP)/ext/misc/closure.c \
+  $(TOP)/ext/misc/csv.c \
   $(TOP)/ext/misc/eval.c \
   $(TOP)/ext/misc/fileio.c \
   $(TOP)/ext/misc/fuzzer.c \
@@ -622,6 +623,10 @@ sqlite3$(TEXE):	$(TOP)/src/shell.c sqlite3.c
 
 sqldiff$(TEXE):	$(TOP)/tool/sqldiff.c sqlite3.c sqlite3.h
 	$(LTLINK) -o $@ $(TOP)/tool/sqldiff.c sqlite3.c $(TLIBS)
+
+scrub$(TEXE):	$(TOP)/ext/misc/scrub.c sqlite3.o
+	$(LTLINK) -o $@ -I. -DSCRUB_STANDALONE \
+		$(TOP)/ext/misc/scrub.c sqlite3.o $(TLIBS)
 
 srcck1$(BEXE):	$(TOP)/tool/srcck1.c
 	$(BCC) -o srcck1$(BEXE) $(TOP)/tool/srcck1.c
@@ -1087,7 +1092,7 @@ FTS5_SRC = \
 fts5parse.c:	$(TOP)/ext/fts5/fts5parse.y lemon 
 	cp $(TOP)/ext/fts5/fts5parse.y .
 	rm -f fts5parse.h
-	./lemon $(OPTS) fts5parse.y
+	./lemon$(BEXE) $(OPTS) fts5parse.y
 
 fts5parse.h: fts5parse.c
 
@@ -1219,8 +1224,9 @@ loadfts$(EXE): $(TOP)/tool/loadfts.c libsqlite3.la
 # symbols that do not begin with "sqlite3_". It is run as part of the
 # releasetest.tcl script.
 #
+VALIDIDS=' sqlite3(changeset|changegroup|session)?_'
 checksymbols: sqlite3.lo
-	nm -g --defined-only sqlite3.o | egrep -v ' sqlite3(changeset|session)?_' ; test $$? -ne 0
+	nm -g --defined-only sqlite3.o | egrep -v $(VALIDIDS); test $$? -ne 0
 	echo '0 errors out of 1 tests'
 
 # Build the amalgamation-autoconf package.  The amalamgation-tarball target builds

@@ -215,7 +215,9 @@ static int writeListSync(CrashFile *pFile, int isCrash){
   }
 
 #ifdef TRACE_CRASHTEST
-  printf("Sync %s (is %s crash)\n", pFile->zName, (isCrash?"a":"not a"));
+  if( pFile ){
+    printf("Sync %s (is %s crash)\n", pFile->zName, (isCrash?"a":"not a"));
+  }
 #endif
 
   ppPtr = &g.pWriteList;
@@ -701,6 +703,10 @@ static int cfCurrentTime(sqlite3_vfs *pCfVfs, sqlite_double *pTimeOut){
   sqlite3_vfs *pVfs = (sqlite3_vfs *)pCfVfs->pAppData;
   return pVfs->xCurrentTime(pVfs, pTimeOut);
 }
+static int cfGetLastError(sqlite3_vfs *pCfVfs, int n, char *z){
+  sqlite3_vfs *pVfs = (sqlite3_vfs *)pCfVfs->pAppData;
+  return pVfs->xGetLastError(pVfs, n, z);
+}
 
 static int processDevSymArgs(
   Tcl_Interp *interp,
@@ -796,6 +802,27 @@ static int processDevSymArgs(
 }
 
 /*
+** tclcmd:   sqlite3_crash_now
+**
+** Simulate a crash immediately. This function does not return 
+** (writeListSync() calls exit(-1)).
+*/
+static int crashNowCmd(
+  void * clientData,
+  Tcl_Interp *interp,
+  int objc,
+  Tcl_Obj *CONST objv[]
+){
+  if( objc!=1 ){
+    Tcl_WrongNumArgs(interp, 1, objv, "");
+    return TCL_ERROR;
+  }
+  writeListSync(0, 1);
+  assert( 0 );
+  return TCL_OK;
+}
+
+/*
 ** tclcmd:   sqlite_crash_enable ENABLE
 **
 ** Parameter ENABLE must be a boolean value. If true, then the "crash"
@@ -827,7 +854,7 @@ static int crashEnableCmd(
     cfRandomness,         /* xRandomness */
     cfSleep,              /* xSleep */
     cfCurrentTime,        /* xCurrentTime */
-    0,                    /* xGetlastError */
+    cfGetLastError,       /* xGetLastError */
     0,                    /* xCurrentTimeInt64 */
   };
 
@@ -940,6 +967,27 @@ static int devSymObjCmd(
   devsym_register(iDc, iSectorSize);
 
   return TCL_OK;
+
+}
+
+/*
+** tclcmd: unregister_devsim
+*/
+static int dsUnregisterObjCmd(
+  void * clientData,
+  Tcl_Interp *interp,
+  int objc,
+  Tcl_Obj *CONST objv[]
+){
+  void devsym_unregister(void);
+
+  if( objc!=1 ){
+    Tcl_WrongNumArgs(interp, 1, objv, "");
+    return TCL_ERROR;
+  }
+
+  devsym_unregister();
+  return TCL_OK;
 }
 
 /*
@@ -1009,7 +1057,9 @@ int Sqlitetest6_Init(Tcl_Interp *interp){
 #ifndef SQLITE_OMIT_DISKIO
   Tcl_CreateObjCommand(interp, "sqlite3_crash_enable", crashEnableCmd, 0, 0);
   Tcl_CreateObjCommand(interp, "sqlite3_crashparams", crashParamsObjCmd, 0, 0);
+  Tcl_CreateObjCommand(interp, "sqlite3_crash_now", crashNowCmd, 0, 0);
   Tcl_CreateObjCommand(interp, "sqlite3_simulate_device", devSymObjCmd, 0, 0);
+  Tcl_CreateObjCommand(interp, "unregister_devsim", dsUnregisterObjCmd, 0, 0);
   Tcl_CreateObjCommand(interp, "register_jt_vfs", jtObjCmd, 0, 0);
   Tcl_CreateObjCommand(interp, "unregister_jt_vfs", jtUnregisterObjCmd, 0, 0);
 #endif

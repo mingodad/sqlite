@@ -1,3 +1,8 @@
+## Decimal64
+
+This repository contains a modified sqlite3 that can be compiled to use 
+GCC _Decimal64 as floating point.
+
 <h1 align="center">SQLite Source Repository</h1>
 
 This repository contains the complete source code for the SQLite database

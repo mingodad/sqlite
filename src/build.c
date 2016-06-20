@@ -338,7 +338,7 @@ Table *sqlite3FindTable(sqlite3 *db, const char *zName, const char *zDatabase){
 */
 Table *sqlite3LocateTable(
   Parse *pParse,         /* context in which to report errors */
-  int isView,            /* True if looking for a VIEW rather than a TABLE */
+  u32 flags,             /* LOCATE_VIEW or LOCATE_NOERR */
   const char *zName,     /* Name of the table we are looking for */
   const char *zDbase     /* Name of the database.  Might be NULL */
 ){
@@ -352,7 +352,7 @@ Table *sqlite3LocateTable(
 
   p = sqlite3FindTable(pParse->db, zName, zDbase);
   if( p==0 ){
-    const char *zMsg = isView ? "no such view" : "no such table";
+    const char *zMsg = flags & LOCATE_VIEW ? "no such view" : "no such table";
 #ifndef SQLITE_OMIT_VIRTUALTABLE
     if( sqlite3FindDbName(pParse->db, zDbase)<1 ){
       /* If zName is the not the name of a table in the schema created using
@@ -364,12 +364,14 @@ Table *sqlite3LocateTable(
       }
     }
 #endif
-    if( zDbase ){
-      sqlite3ErrorMsg(pParse, "%s: %s.%s", zMsg, zDbase, zName);
-    }else{
-      sqlite3ErrorMsg(pParse, "%s: %s", zMsg, zName);
+    if( (flags & LOCATE_NOERR)==0 ){
+      if( zDbase ){
+        sqlite3ErrorMsg(pParse, "%s: %s.%s", zMsg, zDbase, zName);
+      }else{
+        sqlite3ErrorMsg(pParse, "%s: %s", zMsg, zName);
+      }
+      pParse->checkSchema = 1;
     }
-    pParse->checkSchema = 1;
   }
 
   return p;
@@ -386,7 +388,7 @@ Table *sqlite3LocateTable(
 */
 Table *sqlite3LocateTableItem(
   Parse *pParse, 
-  int isView, 
+  u32 flags,
   struct SrcList_item *p
 ){
   const char *zDb;
@@ -397,7 +399,7 @@ Table *sqlite3LocateTableItem(
   }else{
     zDb = p->zDatabase;
   }
-  return sqlite3LocateTable(pParse, isView, p->zName, zDb);
+  return sqlite3LocateTable(pParse, flags, p->zName, zDb);
 }
 
 /*
@@ -2528,6 +2530,7 @@ void sqlite3DropTable(Parse *pParse, SrcList *pName, int isView, int noErr){
   assert( pName->nSrc==1 );
   if( sqlite3ReadSchema(pParse) ) goto exit_drop_table;
   if( noErr ) db->suppressErr++;
+  assert( isView==0 || isView==LOCATE_VIEW );
   pTab = sqlite3LocateTableItem(pParse, isView, &pName->a[0]);
   if( noErr ) db->suppressErr--;
 
@@ -3458,10 +3461,11 @@ void sqlite3DefaultRowEst(Index *pIdx){
   int i;
 
   /* Set the first entry (number of rows in the index) to the estimated 
-  ** number of rows in the table. Or 10, if the estimated number of rows 
-  ** in the table is less than that.  */
+  ** number of rows in the table, or half the number of rows in the table
+  ** for a partial index.   But do not let the estimate drop below 10. */
   a[0] = pIdx->pTable->nRowLogEst;
-  if( a[0]<33 ) a[0] = 33;        assert( 33==sqlite3LogEst(10) );
+  if( pIdx->pPartIdxWhere!=0 ) a[0] -= 10;  assert( 10==sqlite3LogEst(2) );
+  if( a[0]<33 ) a[0] = 33;                  assert( 33==sqlite3LogEst(10) );
 
   /* Estimate that a[1] is 10, a[2] is 9, a[3] is 8, a[4] is 7, a[5] is
   ** 6 and each subsequent value (if any) is 5.  */

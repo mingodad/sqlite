@@ -482,7 +482,8 @@ TESTPROGS = \
   testfixture$(EXE) \
   sqlite3$(EXE) \
   sqlite3_analyzer$(EXE) \
-  sqldiff$(EXE)
+  sqldiff$(EXE) \
+  dbhash$(EXE)
 
 # Databases containing fuzzer test cases
 #
@@ -518,6 +519,10 @@ sqlite3$(EXE):	$(TOP)/src/shell.c libsqlite3.a sqlite3.h
 sqldiff$(EXE):	$(TOP)/tool/sqldiff.c sqlite3.c sqlite3.h
 	$(TCCX) -o sqldiff$(EXE) -DSQLITE_THREADSAFE=0 \
 		$(TOP)/tool/sqldiff.c sqlite3.c $(TLIBS) $(THREADLIB)
+
+dbhash$(EXE):	$(TOP)/tool/dbhash.c sqlite3.c sqlite3.h
+	$(TCCX) -o dbhash$(EXE) -DSQLITE_THREADSAFE=0 \
+		$(TOP)/tool/dbhash.c sqlite3.c $(TLIBS) $(THREADLIB)
 
 scrub$(EXE):	$(TOP)/ext/misc/scrub.c sqlite3.o
 	$(TCC) -I. -DSCRUB_STANDALONE -o scrub$(EXE) $(TOP)/ext/misc/scrub.c sqlite3.o $(THREADLIB)

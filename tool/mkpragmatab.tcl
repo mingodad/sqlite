@@ -317,6 +317,8 @@ set pragma_def {
   NAME: soft_heap_limit
 
   NAME: threads
+
+  NAME: use_attached_dbs
 }
 
 # Open the output file

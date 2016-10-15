@@ -14,7 +14,11 @@
 */
 
 #include "sqlite3.h"
-#include <tcl.h>
+#if defined(INCLUDE_SQLITE_TCL_H)
+#  include "sqlite_tcl.h"
+#else
+#  include "tcl.h"
+#endif
 
 /* Solely for the UNUSED_PARAMETER() macro. */
 #include "sqliteInt.h"
@@ -357,7 +361,11 @@ static int bfs_query_func(sqlite3_rtree_query_info *p){
 *************************************************************************/
 
 #include <assert.h>
-#include "tcl.h"
+#if defined(INCLUDE_SQLITE_TCL_H)
+#  include "sqlite_tcl.h"
+#else
+#  include "tcl.h"
+#endif
 
 typedef struct Cube Cube;
 struct Cube {
@@ -440,7 +448,7 @@ static int cube_geom(
 }
 #endif /* SQLITE_ENABLE_RTREE */
 
-static int register_cube_geom(
+static int SQLITE_TCLAPI register_cube_geom(
   void * clientData,
   Tcl_Interp *interp,
   int objc,
@@ -468,7 +476,7 @@ static int register_cube_geom(
   return TCL_OK;
 }
 
-static int register_circle_geom(
+static int SQLITE_TCLAPI register_circle_geom(
   void * clientData,
   Tcl_Interp *interp,
   int objc,

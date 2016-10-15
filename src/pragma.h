@@ -38,14 +38,15 @@
 #define PragTyp_TEMP_STORE                    32
 #define PragTyp_TEMP_STORE_DIRECTORY          33
 #define PragTyp_THREADS                       34
-#define PragTyp_WAL_AUTOCHECKPOINT            35
-#define PragTyp_WAL_CHECKPOINT                36
-#define PragTyp_ACTIVATE_EXTENSIONS           37
-#define PragTyp_HEXKEY                        38
-#define PragTyp_KEY                           39
-#define PragTyp_REKEY                         40
-#define PragTyp_LOCK_STATUS                   41
-#define PragTyp_PARSER_TRACE                  42
+#define PragTyp_USE_ATTACHED_DBS              35
+#define PragTyp_WAL_AUTOCHECKPOINT            36
+#define PragTyp_WAL_CHECKPOINT                37
+#define PragTyp_ACTIVATE_EXTENSIONS           38
+#define PragTyp_HEXKEY                        39
+#define PragTyp_KEY                           40
+#define PragTyp_REKEY                         41
+#define PragTyp_LOCK_STATUS                   42
+#define PragTyp_PARSER_TRACE                  43
 #define PragFlag_NeedSchema           0x01
 #define PragFlag_ReadOnly             0x02
 static const struct sPragmaNames {
@@ -414,6 +415,10 @@ static const struct sPragmaNames {
     /* ePragTyp:  */ PragTyp_THREADS,
     /* ePragFlag: */ 0,
     /* iArg:      */ 0 },
+  { /* zName:     */ "use_attached_dbs",
+    /* ePragTyp:  */ PragTyp_USE_ATTACHED_DBS,
+    /* ePragFlag: */ 0,
+    /* iArg:      */ 0 },
 #if !defined(SQLITE_OMIT_SCHEMA_VERSION_PRAGMAS)
   { /* zName:     */ "user_version",
     /* ePragTyp:  */ PragTyp_HEADER_VALUE,
@@ -461,4 +466,4 @@ static const struct sPragmaNames {
     /* iArg:      */ SQLITE_WriteSchema|SQLITE_RecoveryMode },
 #endif
 };
-/* Number of pragmas: 60 on by default, 73 total. */
+/* Number of pragmas: 61 on by default, 74 total. */

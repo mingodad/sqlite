@@ -2165,7 +2165,11 @@ static void lastRowsFunc(sqlite3_context *context, int argc, sqlite3_value **arg
 */
 typedef struct
 {
-    sqlite_double value;
+    union {
+    sqlite_double fvalue;
+    sqlite_int64 ivalue;
+    } uvalue;
+    int isDouble;
 } accumulate_st;
 
 static void accumulateFunc(sqlite3_context *context, int argc, sqlite3_value **argv){
@@ -2179,36 +2183,42 @@ static void accumulateFunc(sqlite3_context *context, int argc, sqlite3_value **a
       setAux=1;
       switch( sqlite3_value_type(argv[0]) ){
         case SQLITE_INTEGER: {
-          saved_value->value = (sqlite_double)sqlite3_value_int64(argv[0]);
+          saved_value->uvalue.ivalue = sqlite3_value_int64(argv[0]);
+	  saved_value->isDouble = 0;
           break;
         }
         case SQLITE_NULL: {
-          saved_value->value = LITDBL(0.0);
+          saved_value->uvalue.fvalue = LITDBL(0.0);
+	  saved_value->isDouble = 1;
           break;
         }
         default: {
-          saved_value->value = sqlite3_value_double(argv[0]);
+          saved_value->uvalue.fvalue = sqlite3_value_double(argv[0]);
+	  saved_value->isDouble = 1;
           break;
         }
       }
   }
   switch( sqlite3_value_type(argv[1]) ){
     case SQLITE_INTEGER: {
-      saved_value->value += (sqlite_double)sqlite3_value_int64(argv[1]);
+      if(saved_value->isDouble) saved_value->uvalue.fvalue += (sqlite_double)sqlite3_value_int64(argv[1]);
+      else saved_value->uvalue.ivalue += sqlite3_value_int64(argv[1]);
       break;
     }
     case SQLITE_NULL: {
       break;
     }
     default: {
-      saved_value->value += sqlite3_value_double(argv[1]);
+      if(saved_value->isDouble) saved_value->uvalue.fvalue += sqlite3_value_double(argv[1]);
+      else saved_value->uvalue.ivalue += (sqlite_int64)sqlite3_value_double(argv[1]);
       break;
     }
   }
   if( setAux ){
     sqlite3_set_auxdata(context, 0, saved_value, (void(*)(void*))sqlite3_free);
   }
-  sqlite3_result_double(context, saved_value->value);
+  if(saved_value->isDouble) sqlite3_result_double(context, saved_value->uvalue.fvalue);
+  else sqlite3_result_int64(context, saved_value->uvalue.ivalue);
 }
 
 /*

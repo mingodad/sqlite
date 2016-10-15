@@ -2,15 +2,26 @@
 #include "sublatin.h"
 #include "sqliteInt.h"
 
+static inline int sl_func_cmp_CollatingFunc(
+  int (*fcmp)(const char*, const char*, int),
+  int nKey1, const void *pKey1,
+  int nKey2, const void *pKey2
+){
+  int nCmpKey1 = nstrLenSubSetLatinUtf8(pKey1, nKey1);
+  int nCmpKey2 = nstrLenSubSetLatinUtf8(pKey2, nKey2);
+  int ncmp = (nCmpKey1<nCmpKey2)?nCmpKey1:nCmpKey2;
+  int r = fcmp(
+      (const char *)pKey1, (const char *)pKey2, ncmp);
+  return (r == 0) ? (nCmpKey1-nCmpKey2) : r;
+}
+
 static int sl_nicmp_deaccent_CollatingFunc(
   void *NotUsed,
   int nKey1, const void *pKey1,
   int nKey2, const void *pKey2
 ){
-  int r = strNICmpSubSetLatinUtf8NoAccents(
-      (const char *)pKey1, (const char *)pKey2, (nKey1<nKey2)?nKey1:nKey2);
   UNUSED_PARAMETER(NotUsed);
-  return r == 0 ? nKey1-nKey2 : r;
+  return sl_func_cmp_CollatingFunc(strNICmpSubSetLatinUtf8NoAccents, nKey1, pKey1, nKey2, pKey2);
 }
 
 static int sl_nicmp_CollatingFunc(
@@ -18,10 +29,8 @@ static int sl_nicmp_CollatingFunc(
   int nKey1, const void *pKey1,
   int nKey2, const void *pKey2
 ){
-  int r = strNICmpSubSetLatinUtf8(
-      (const char *)pKey1, (const char *)pKey2, (nKey1<nKey2)?nKey1:nKey2);
   UNUSED_PARAMETER(NotUsed);
-  return r == 0 ? nKey1-nKey2 : r;
+  return sl_func_cmp_CollatingFunc(strNICmpSubSetLatinUtf8, nKey1, pKey1, nKey2, pKey2);
 }
 
 /*

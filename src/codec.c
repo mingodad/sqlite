@@ -1,3 +1,4 @@
+#ifdef SQLITE_HAS_CODEC
 /*
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
@@ -38,6 +39,7 @@
  */
 
 #include "codec.h"
+#include "btreeInt.h"
 
 #if CODEC_TYPE == CODEC_TYPE_AES256
 #include "sha2.h"
@@ -755,3 +757,4 @@ CodecDecrypt(Codec* codec, int page, unsigned char* data, int len)
   }
 }
 
+#endif //SQLITE_HAS_CODEC

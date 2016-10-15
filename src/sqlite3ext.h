@@ -12,14 +12,12 @@
 ** This header file defines the SQLite interface for use by
 ** shared libraries that want to be imported as extensions into
 ** an SQLite instance.  Shared libraries that intend to be loaded
-** as extensions by SQLite should #include this file instead of 
+** as extensions by SQLite should #include this file instead of
 ** sqlite3.h.
 */
-#ifndef _SQLITE3EXT_H_
-#define _SQLITE3EXT_H_
+#ifndef SQLITE3EXT_H
+#define SQLITE3EXT_H
 #include "sqlite3.h"
-
-typedef struct sqlite3_api_routines sqlite3_api_routines;
 
 /*
 ** The following structure holds pointers to all of the SQLite API
@@ -143,7 +141,7 @@ struct sqlite3_api_routines {
   void  (*thread_cleanup)(void);
   int  (*total_changes)(sqlite3*);
   void * (*trace)(sqlite3*,void(*xTrace)(void*,const char*),void*);
-  void * (*trace_v2)(sqlite3*,void(*xTrace)(void*,const char*),void*,int);
+  void * (*trace_v0)(sqlite3*,void(*xTrace)(void*,const char*),void*,int);
   int  (*transfer_bindings)(sqlite3_stmt*,sqlite3_stmt*);
   void * (*update_hook)(sqlite3*,void(*)(void*,int ,char const*,char const*,
                                          sqlite_int64),void*);
@@ -282,7 +280,20 @@ struct sqlite3_api_routines {
   int (*db_cacheflush)(sqlite3*);
   /* Version 3.12.0 and later */
   int (*system_errno)(sqlite3*);
+  /* Version 3.14.0 and later */
+  int (*trace_v2)(sqlite3*,unsigned,int(*)(unsigned,void*,void*,void*),void*);
+  char *(*expanded_sql)(sqlite3_stmt*);
 };
+
+/*
+** This is the function signature used for all extension entry points.  It
+** is also defined in the file "loadext.c".
+*/
+typedef int (*sqlite3_loadext_entry)(
+  sqlite3 *db,                       /* Handle to the database. */
+  char **pzErrMsg,                   /* Used to set error string on failure. */
+  const sqlite3_api_routines *pThunk /* Extension API function pointers. */
+);
 
 /*
 ** The following macros redefine the API routines so that they are
@@ -404,7 +415,7 @@ struct sqlite3_api_routines {
 #define sqlite3_thread_cleanup         sqlite3_api->thread_cleanup
 #define sqlite3_total_changes          sqlite3_api->total_changes
 #define sqlite3_trace                  sqlite3_api->trace
-#define sqlite3_trace_v2               sqlite3_api->trace_v2
+#define sqlite3_trace_v0                  sqlite3_api->trace_v0
 #ifndef SQLITE_OMIT_DEPRECATED
 #define sqlite3_transfer_bindings      sqlite3_api->transfer_bindings
 #endif
@@ -528,21 +539,24 @@ struct sqlite3_api_routines {
 #define sqlite3_db_cacheflush          sqlite3_api->db_cacheflush
 /* Version 3.12.0 and later */
 #define sqlite3_system_errno           sqlite3_api->system_errno
+/* Version 3.14.0 and later */
+#define sqlite3_trace_v2               sqlite3_api->trace_v2
+#define sqlite3_expanded_sql           sqlite3_api->expanded_sql
 #endif /* !defined(SQLITE_CORE) && !defined(SQLITE_OMIT_LOAD_EXTENSION) */
 
 #if !defined(SQLITE_CORE) && !defined(SQLITE_OMIT_LOAD_EXTENSION)
-  /* This case when the file really is being compiled as a loadable 
+  /* This case when the file really is being compiled as a loadable
   ** extension */
 # define SQLITE_EXTENSION_INIT1     const sqlite3_api_routines *sqlite3_api=0;
 # define SQLITE_EXTENSION_INIT2(v)  sqlite3_api=v;
 # define SQLITE_EXTENSION_INIT3     \
     extern const sqlite3_api_routines *sqlite3_api;
 #else
-  /* This case when the file is being statically linked into the 
+  /* This case when the file is being statically linked into the
   ** application */
 # define SQLITE_EXTENSION_INIT1     /*no-op*/
 # define SQLITE_EXTENSION_INIT2(v)  (void)v; /* unused parameter */
 # define SQLITE_EXTENSION_INIT3     /*no-op*/
 #endif
 
-#endif /* _SQLITE3EXT_H_ */
+#endif /* SQLITE3EXT_H */

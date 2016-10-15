@@ -293,6 +293,13 @@ u32 sqlite3BitvecSize(Bitvec *p){
   return p->iSize;
 }
 
+/*
+** Return the value of the BITVEC_SZ.
+*/
+u32 sqlite3BITVEC_SZ(){
+  return BITVEC_SZ;
+}
+
 #ifndef SQLITE_OMIT_BUILTIN_TEST
 /*
 ** Let V[] be an array of unsigned characters sufficient to hold

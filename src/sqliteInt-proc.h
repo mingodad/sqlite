@@ -531,6 +531,16 @@
 # define SQLITE_MAX_WORKER_THREADS SQLITE_DEFAULT_WORKER_THREADS
 #endif
 
+#ifndef SQLITE_MAX_USE_ATTACHED_DBS
+# define SQLITE_MAX_USE_ATTACHED_DBS 1
+#endif
+#ifndef SQLITE_USE_ATTACHED_DBS
+# define SQLITE_USE_ATTACHED_DBS 0
+#endif
+#ifndef SQLITE_DEFAULT_USE_ATTACHED_DBS
+# define SQLITE_DEFAULT_USE_ATTACHED_DBS SQLITE_USE_ATTACHED_DBS
+#endif
+
 /*
 ** The default initial allocation for the pagecache when using separate
 ** pagecaches for each database connection.  A positive number is the
@@ -1067,7 +1077,8 @@ struct Schema {
 ** The number of different kinds of things that can be limited
 ** using the sqlite3_limit() interface.
 */
-#define SQLITE_N_LIMIT (SQLITE_LIMIT_WORKER_THREADS+1)
+//#define SQLITE_N_LIMIT (SQLITE_LIMIT_WORKER_THREADS+1)
+#define SQLITE_N_LIMIT (SQLITE_LIMIT_USE_ATTACHED_DBS+1)
 
 /*
 ** Lookaside malloc is a set of fixed-size buffers that can be used

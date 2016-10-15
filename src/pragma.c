@@ -338,7 +338,7 @@ void sqlite3Pragma(
   }
 
   assert( pId2 );
-  zDb = pId2->n>0 ? pDb->zName : 0;
+  zDb = pId2->n>0 ? pDb->zDbSName : 0;
   if( sqlite3AuthCheck(pParse, SQLITE_PRAGMA, zLeft, zRight, zDb) ){
     goto pragma_out;
   }
@@ -1191,10 +1191,10 @@ void sqlite3Pragma(
     setAllColumnNames(v, 3, azCol); assert( 3==ArraySize(azCol) );
     for(i=0; i<db->nDb; i++){
       if( db->aDb[i].pBt==0 ) continue;
-      assert( db->aDb[i].zName!=0 );
+      assert( db->aDb[i].zDbSName!=0 );
       sqlite3VdbeMultiLoad(v, 1, "iss",
          i,
-         db->aDb[i].zName,
+         db->aDb[i].zDbSName,
          sqlite3BtreeGetFilename(db->aDb[i].pBt));
       sqlite3VdbeAddOp2(v, OP_ResultRow, 1, 3);
     }
@@ -1334,8 +1334,6 @@ void sqlite3Pragma(
             sqlite3VdbeAddOp3(v, OP_Column, 0, iKey, regRow);
             sqlite3ColumnDefault(v, pTab, iKey, regRow);
             sqlite3VdbeAddOp2(v, OP_IsNull, regRow, addrOk); VdbeCoverage(v);
-            sqlite3VdbeAddOp2(v, OP_MustBeInt, regRow,
-               sqlite3VdbeCurrentAddr(v)+3); VdbeCoverage(v);
           }else{
             sqlite3VdbeAddOp2(v, OP_Rowid, 0, regRow);
           }
@@ -1488,7 +1486,7 @@ void sqlite3Pragma(
       sqlite3VdbeChangeP5(v, (u8)i);
       addr = sqlite3VdbeAddOp1(v, OP_IsNull, 2); VdbeCoverage(v);
       sqlite3VdbeAddOp4(v, OP_String8, 0, 3, 0,
-         sqlite3MPrintf(db, "*** in database %s ***\n", db->aDb[i].zName),
+         sqlite3MPrintf(db, "*** in database %s ***\n", db->aDb[i].zDbSName),
          P4_DYNAMIC);
       sqlite3VdbeAddOp3(v, OP_Move, 2, 4, 1);
       sqlite3VdbeAddOp3(v, OP_Concat, 4, 3, 2);
@@ -1911,6 +1909,26 @@ void sqlite3Pragma(
     break;
   }
 
+  /*
+  **   PRAGMA use_attached_dbs
+  **   PRAGMA use_attached_dbs = ON/OFF
+  **
+  ** The first form reports the current setting for the
+  ** use_attached_dbs flag.  The second form changes the use_attached_dbs
+  ** flag setting and reports thenew value.
+  */
+  case PragTyp_USE_ATTACHED_DBS: {
+    int b = -1;
+    if( zRight ){
+      b = sqlite3GetBoolean(zRight, 0);
+      sqlite3_limit(db, SQLITE_LIMIT_USE_ATTACHED_DBS, b);
+    }
+    b = sqlite3_limit(db, SQLITE_LIMIT_USE_ATTACHED_DBS, -1);
+    returnSingleInt(v, "use_attached_dbs", b);
+    break;
+  }
+
+
 #if defined(SQLITE_DEBUG) || defined(SQLITE_TEST)
   /*
   ** Report the current state of file logs for all databases
@@ -1927,15 +1945,15 @@ void sqlite3Pragma(
       Btree *pBt;
       const char *zState = "unknown";
       int j;
-      if( db->aDb[i].zName==0 ) continue;
+      if( db->aDb[i].zDbSName==0 ) continue;
       pBt = db->aDb[i].pBt;
       if( pBt==0 || sqlite3BtreePager(pBt)==0 ){
         zState = "closed";
-      }else if( sqlite3_file_control(db, i ? db->aDb[i].zName : 0,
+      }else if( sqlite3_file_control(db, i ? db->aDb[i].zDbSName : 0, 
                                      SQLITE_FCNTL_LOCKSTATE, &j)==SQLITE_OK ){
          zState = azLockName[j];
       }
-      sqlite3VdbeMultiLoad(v, 1, "ss", db->aDb[i].zName, zState);
+      sqlite3VdbeMultiLoad(v, 1, "ss", db->aDb[i].zDbSName, zState);
       sqlite3VdbeAddOp2(v, OP_ResultRow, 1, 2);
     }
     break;
